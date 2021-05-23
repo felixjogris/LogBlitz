@@ -44,7 +44,9 @@ def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", 
                     max_name_indent_len = len(entry.name) + 1 + 2 * indent
 
                 logfiles += childs
-        elif entry.is_file(follow_symlinks=False) and re.search(logfilefilter, entry.name, re.IGNORECASE):
+        elif (entry.is_file(follow_symlinks=False) and
+              (logfilefilter == "" or
+               re.search(logfilefilter, entry.name, re.IGNORECASE))):
             stat = entry.stat(follow_symlinks=False)
             size_human = bytes_pretty(stat.st_size)
 
@@ -76,7 +78,7 @@ max_name_indent_len = 0
 
 for logdir in LOGDIRS:
     max_name_indent_len, childs = traverse_logdir(logdir, max_name_indent_len,
-                                                  logfilefilter)
+                                                  re.escape(logfilefilter))
     logfiles[logdir] = childs
 
 content_type = "text/html; charset=utf-8"
