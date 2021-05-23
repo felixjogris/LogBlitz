@@ -70,7 +70,7 @@ x.onreadystatechange = function () {
 };
 x.open("POST", "");
 x.timeout = 10000;
-x.send('{"action":"logfiles"}');
+x.send(JSON.stringify({ action: "logfiles" }));
 </script>
 </body>
 </html>"""
