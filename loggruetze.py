@@ -2,78 +2,121 @@
 
 LOGDIRS = ("/var/log",)
 
-import sys, os, re, json
+import sys, os, re, datetime, html, cgi
 
-def traverse_logdir(logdir, subdir=""):
-    logfiles = {}
+def bytes_pretty(filesize):
+    for suffix in ("B", "k", "M", "G", "T"):
+        if filesize < 1024:
+            break
+        filesize /= 1024
+    return f"{filesize:.2f}{suffix}"
+
+def logfile_sorter(entry):
+    match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
+    return -1 if match is None else int(match.group(1))
+
+def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", indent=0):
+    logfiles = []
 
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
     except Exception as e:
-        return logfiles
+        return max_name_indent_len, logfiles
+
+    entries = filter(lambda entry: not entry.name.startswith("."), entries)
+    entries = sorted(entries, key=logfile_sorter)
+    entries = sorted(entries, key=lambda entry: entry.name)
 
     for entry in entries:
         relname = os.path.join(subdir, entry.name)
 
         if entry.is_dir(follow_symlinks=False):
-            logfiles[entry.path] = {
-                "name"   : entry.name,
-                "childs" : traverse_logdir(logdir, relname)
-            }
-        elif entry.is_file(follow_symlinks=False):
+            max_name_indent_len, childs = traverse_logdir(logdir,
+                                                          max_name_indent_len,
+                                                          logfilefilter,
+                                                          relname, indent + 1)
+
+            if len(childs) > 0:
+                logfiles.append({ "name"   : entry.name + "/",
+                                  "indent" : indent })
+
+                if len(entry.name) + 1 + 2 * indent > max_name_indent_len:
+                    max_name_indent_len = len(entry.name) + 1 + 2 * indent
+
+                logfiles += childs
+        elif entry.is_file(follow_symlinks=False) and re.search(logfilefilter, entry.name, re.IGNORECASE):
             stat = entry.stat(follow_symlinks=False)
-            logfiles[entry.path] = {
-                "name"  : entry.name,
-                "mtime" : stat.st_mtime,
-                "size"  : stat.st_size
-            }
+            size_human = bytes_pretty(stat.st_size)
 
-    return logfiles
+            mtime_human = datetime.datetime.fromtimestamp(
+                                  stat.st_mtime).strftime("%Y/%m/%d %H:%M:%S")
 
+            logfiles.append({ "name"        : entry.name,
+                              "indent"      : indent,
+                              "path"        : entry.path,
+                              "mtime"       : stat.st_mtime,
+                              "mtime_human" : mtime_human,
+                              "size"        : stat.st_size,
+                              "size_human"  : size_human })
+
+            if len(entry.name) + 2 * indent > max_name_indent_len:
+                max_name_indent_len = len(entry.name) + 2 * indent
+
+    return max_name_indent_len, logfiles
+
+
+logfilefilter = ""
+
+if os.environ.get("REQUEST_METHOD", "GET") == "POST":
+    cgi = cgi.FieldStorage()
+    logfilefilter = cgi.getvalue("logfilefilter", "")
 
 logfiles = {}
+max_name_indent_len = 0
+
 for logdir in LOGDIRS:
-    logfiles[logdir] = traverse_logdir(logdir)
+    max_name_indent_len, childs = traverse_logdir(logdir, max_name_indent_len,
+                                                  logfilefilter)
+    logfiles[logdir] = childs
 
-request_method = os.environ.get("REQUEST_METHOD", "GET")
-
-if request_method == "POST":
-    content_length = int(os.environ.get("CONTENT_LENGTH", "0"))
-    query = json.loads(sys.stdin.read(content_length))
-    action = query.get("action", "")
-
-    if action == "logfiles":
-        result = logfiles
-    elif action == "search":
-        result = { "error" : "not yet implemented" }
-    else:
-        result = { "error" : "unknown action" }
-
-    content_type = "application/json"
-    result = json.dumps(result)
-else:
-    content_type = "text/html; charset=utf-8"
-    result = """<html>
+content_type = "text/html; charset=utf-8"
+result = (f"""<html>
 <head>
 <title>Loggrütze</title>
 </head>
 <body>
-<p>Loggrütze</p>
-<pre id="test">
-</pre>
-<script>
-x = new XMLHttpRequest();
-x.onreadystatechange = function () {
-  if ((x.readyState == 4) && (x.status == 200)) {
-    document.getElementById("test").textContent = x.response;
-  }
-};
-x.open("POST", "");
-x.timeout = 10000;
-x.send(JSON.stringify({ action: "logfiles" }));
-</script>
+<form method="POST">
+<div>
+Display filter: <input type="text" name="logfilefilter" value="{(html.escape(logfilefilter))}">
+<input type="submit">
+</div>
+<div>
+<select id="logfiles" size="30" multiple style="font-family:monospace">""")
+
+for logdir in sorted(logfiles):
+    result += (f'<optgroup label="{html.escape(logdir)}/" ' +
+               'style="font-family:monospace">\n')
+
+    for logfile in logfiles[logdir]:
+        filler = (max_name_indent_len - 2 * logfile["indent"] -
+                  len(logfile["name"]) + 1)
+
+        result += (f'<option>{"&nbsp;" * 2 * logfile["indent"]}' +
+                   f'{logfile["name"]}{"&nbsp;" * filler}')
+
+        if "size_human" in logfile and "mtime_human" in logfile:
+            result += (f' {"&nbsp;" * (8 - len(logfile["size_human"]))}' +
+                       f'{logfile["size_human"]}&nbsp;&nbsp;' +
+                       f'{logfile["mtime_human"]}&nbsp;')
+
+        result += "</option>\n"
+
+    result += "</optgroup>\n"
+
+result += """</select>
+</div>
 </body>
 </html>"""
 
-print("Content-Type: %s\nContent-Length: %i\n" % (content_type, len(result)))
-print(result)
+print(f"Content-Type: {content_type}\nContent-Length: {len(result)}\n")
+print(result,)
