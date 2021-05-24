@@ -182,7 +182,7 @@ for logdir in LOGDIRS:
 
 result = ("""<html>
 <head>
-<title>LogGrütze</title>
+<title>LogBlitz</title>
 <style type="text/css">
 * {
   margin: 0;
@@ -236,7 +236,7 @@ optgroup {
  title="Limit search results to this amount of memory"
  style="margin-left:10px; text-align:right"> MByte memory limit
 <span style="float:right; font-size:small">
-<a href="https://ogris.de/loggruetze/" target="_blank">About LogGrütze...</a>
+<a href="https://ogris.de/logblitz/" target="_blank">About LogBlitz...</a>
 </span>
 </div>
 </div>
