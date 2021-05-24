@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 LOGDIRS = ("/var/log",)
+XZ = "/usr/bin/xz"
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
-import sys, os, re, datetime, html, cgi
+import sys, os, re, datetime, html, cgi, gzip, bz2
 
 class LogFiles:
     dir2files = {}
-    file2dir = {}
     max_name_indent_len = 0
     shown_files = 0
     total_files = 0
@@ -45,10 +45,11 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
         if entry.is_dir(follow_symlinks=False):
             logfiles.total_dirs += 1
+            cnt = len(dir2files)
             if (traverse_logdir(logdir, filefilter, logfiles, relname,
                                 indent + 1)):
                 logfiles.shown_dirs += 1
-                dir2files.append({
+                dir2files.insert(cnt, {
                     "name"   : entry.name + "/",
                     "indent" : indent })
 
@@ -60,7 +61,6 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
             stat = entry.stat(follow_symlinks=False)
             logfiles.total_files += 1
             logfiles.total_bytes += stat.st_size
-            logfiles.file2dir[entry.path] = logdir
 
             if (filefilter == "" or
                 re.search(filefilter, entry.name, re.IGNORECASE)):
@@ -87,17 +87,42 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
     return found_files
 
+def search(logfiles, fileselect, query, regex, ignorecase, limitlines,
+           limitmemory):
+    retval=[]
+    for logfile in filter(lambda logfile: "path" in logfile and
+                          logfile["path"] in fileselect,
+                          [logfile for logfile in logfiles.dir2files[logdir]
+                           for logdir in LOGDIRS]):
+        retval.append(logfile["path"])
+        if logfile["path"].lower().endswith(".gz"):
+            pass
+        elif logfile["path"].lower().endswith(".bz2"):
+            pass
+        elif logfile["path"].lower().endswith(".xz"):
+            pass
+        else:
+            with open(logfile["path"]) as fp:
+                for line in fp:
+                    if query in line:
+                        retval.append("<nobr>"+html.escape(line)+"</nobr>")
+
+    return retval
+
 
 query = ""
+regex = False
 ignorecase = False
 filefilter = ""
 fileselect = []
 limitlines = 1000
 limitmemory = 1
+dosearch = False
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
     query = form.getvalue("query", query)
+    regex = "regex" in form
     ignorecase = "ignorecase" in form
     filefilter = form.getvalue("filefilter", filefilter)
     fileselect = form.getlist("fileselect")
@@ -109,20 +134,18 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         limitmemory = int(tmp)
     if form.getvalue("clear", "") == "Clear":
         filefilter = ""
-    if form.getvalue("search", "") == "Search":
-        pass
-
+    dosearch = form.getvalue("search", "") == "Search"
 
 logfiles = LogFiles()
 
 for logdir in LOGDIRS:
-    logfiles.shown_dirs += 1
     logfiles.total_dirs += 1
 
     if logdir.endswith(os.path.sep):
         logdir = logdir[:-1]
 
-    traverse_logdir(logdir, re.escape(filefilter), logfiles)
+    if traverse_logdir(logdir, re.escape(filefilter), logfiles):
+        logfiles.shown_dirs += 1
 
 result = ("""<html>
 <head>
@@ -163,10 +186,12 @@ optgroup {
 <div style="display:table-cell; width:100%; text-align:center">
 <input type="text" name="query" value="{(html.escape(query))}"
  placeholder="Search log entries..."
- title="Use a regular expression to search log entries">
+ title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
  {('checked="checked"' if ignorecase else "")}> Ignore case
+<input type="checkbox" name="regex" style="margin-left:10px"
+ {('checked="checked"' if regex else "")}> Regular expression
 <input type="text" name="limitlines" value="{str(limitlines)}" size="4"
   title="Limit search results to this number of lines"
  style="margin-left:10px; text-align:right"> line limit
@@ -209,7 +234,8 @@ for logdir in sorted(logfiles.dir2files):
 result += f"""</select>
 </div>
 <div id="result">
-{"<br>".join(fileselect)}
+{"<br>".join(search(logfiles, fileselect, query, regex, ignorecase, limitlines,
+                    limitmemory)) if dosearch else ""}
 </div>
 </div>
 
@@ -231,5 +257,5 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </html>"""
 
 print("Content-Type: text/html; charset=utf-8\n" +
-      f"Content-Length: {len(result)}\n")
-print(result,)
+      f'Content-Length: {len(result.encode("utf-8"))}\n')
+print(result, end="")
