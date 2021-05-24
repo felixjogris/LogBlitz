@@ -15,7 +15,7 @@ def logfile_sorter(entry):
     match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
     return -1 if match is None else int(match.group(1))
 
-def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", indent=0):
+def traverse_logdir(logdir, max_name_indent_len=0, filefilter="", subdir="", indent=0):
     logfiles = []
 
     try:
@@ -33,7 +33,7 @@ def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", 
         if entry.is_dir(follow_symlinks=False):
             max_name_indent_len, childs = traverse_logdir(logdir,
                                                           max_name_indent_len,
-                                                          logfilefilter,
+                                                          filefilter,
                                                           relname, indent + 1)
 
             if len(childs) > 0:
@@ -45,8 +45,8 @@ def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", 
 
                 logfiles += childs
         elif (entry.is_file(follow_symlinks=False) and
-              (logfilefilter == "" or
-               re.search(logfilefilter, entry.name, re.IGNORECASE))):
+              (filefilter == "" or
+               re.search(filefilter, entry.name, re.IGNORECASE))):
             stat = entry.stat(follow_symlinks=False)
             size_human = bytes_pretty(stat.st_size)
 
@@ -67,37 +67,64 @@ def traverse_logdir(logdir, max_name_indent_len=0, logfilefilter="", subdir="", 
     return max_name_indent_len, logfiles
 
 
-logfilefilter = ""
+filefilter = ""
+query = ""
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cgi = cgi.FieldStorage()
-    logfilefilter = cgi.getvalue("logfilefilter", "")
+    filefilter = cgi.getvalue("filefilter", "")
+    query = cgi.getvalue("query", "")
 
 logfiles = {}
 max_name_indent_len = 0
 
 for logdir in LOGDIRS:
     max_name_indent_len, childs = traverse_logdir(logdir, max_name_indent_len,
-                                                  re.escape(logfilefilter))
+                                                  re.escape(filefilter))
     logfiles[logdir] = childs
 
 content_type = "text/html; charset=utf-8"
-result = (f"""<html>
+result = ("""<html>
 <head>
 <title>Loggrütze</title>
-</head>
-<body>
+<style type="text/css">
+* {
+  margin:0;
+}
+html, body, form {
+  height:100%;
+  width:100%;
+  font-family:sans-serif;
+  display:table;
+}
+optgroup {
+  font-family:monospace;
+}
+</style>
+</head>""" +
+          f"""<body>
 <form method="POST">
-<div>
-Display filter: <input type="text" name="logfilefilter" value="{(html.escape(logfilefilter))}">
-<input type="submit">
+<div style="display:table-row">
+<div style="display:table-cell">
+<input type="submit" value="Apply" style="float:right">
+<span style="overflow:hidden; display:block">
+<input type="text" name="filefilter" value="{(html.escape(filefilter))}"
+placeholder="Filter filenames..." style="width:100%"
+title="Use a regular expression to filter shown filenames">
+</span>
 </div>
-<div>
-<select id="logfiles" size="30" multiple style="font-family:monospace">""")
+<div style="display:table-cell;width:100%;text-align:center">
+<input type="text" name="query" value="{(html.escape(query))}"
+placeholder="any regex">
+</div>
+</div>
+
+<div style="display:table-row;height:100%;background-color:red">
+<div style="display:table-cell">
+<select name="fileselect" multiple style="font-family:monospace;height:100%">""")
 
 for logdir in sorted(logfiles):
-    result += (f'<optgroup label="{html.escape(logdir)}/" ' +
-               'style="font-family:monospace">\n')
+    result += f'<optgroup label="{html.escape(logdir)}/">\n'
 
     for logfile in logfiles[logdir]:
         filler = (max_name_indent_len - 2 * logfile["indent"] -
@@ -117,6 +144,19 @@ for logdir in sorted(logfiles):
 
 result += """</select>
 </div>
+<div style="display:table-cell;vertical-align:top">
+bla
+</div>
+</div>
+
+<div style="display:table-row">
+<div style="display:table-cell">
+</div>
+<div style="display:table-cell">
+bla
+</div>
+</div>
+
 </body>
 </html>"""
 
