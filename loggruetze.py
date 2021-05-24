@@ -4,7 +4,7 @@ LOGDIRS = ("/var/log",)
 XZ = "/usr/bin/xz"
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
-import sys, os, re, datetime, html, cgi, gzip, bz2
+import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess
 
 class LogFiles:
     dir2files = {}
@@ -30,7 +30,7 @@ def logfile_sorter(entry):
 def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
-    except Exception as e:
+    except Exception as _:
         return False
 
     entries = filter(lambda entry: not entry.name.startswith("."), entries)
@@ -87,25 +87,58 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
     return found_files
 
-def search(logfiles, fileselect, query, regex, ignorecase, limitlines,
-           limitmemory):
-    retval=[]
+def search_in_file(fp, query_re, display):
+    for line in fp:
+        try:
+            decoded_line = line.decode("utf-8")
+        except Exception as _:
+            decoded_line = line.decode("ascii")
+
+        display(query_re.search(decoded_line), decoded_line)
+
+def search(logfiles, fileselect, query, ignorecase, invert, regex,
+           limitlines, limitmemory):
+    retval = []
+
+    try:
+        query_re = re.compile(query if regex else re.escape(query),
+                              re.IGNORECASE if ignorecase else 0)
+    except Exception as e:
+        return [f"Error: Invalid regex: {html.escape(str(e))}"]
+
+    if invert:
+        def display(match, line):
+            if match is None:
+                retval.append(f"<nobr>{html.escape(line)}</nobr>")
+    else:
+        def display(match, line):
+            if not match is None:
+                s, e = match.start(), match.end()
+                retval.append(f"<nobr>{html.escape(line[:s])}" +
+                              f'<b style="background-color:lightyellow">{html.escape(line[s:e])}</b>' +
+                              f"{html.escape(line[e:])}</nobr>")
+
     for logfile in filter(lambda logfile: "path" in logfile and
                           logfile["path"] in fileselect,
                           [logfile for logfile in logfiles.dir2files[logdir]
                            for logdir in LOGDIRS]):
-        retval.append(logfile["path"])
-        if logfile["path"].lower().endswith(".gz"):
-            pass
-        elif logfile["path"].lower().endswith(".bz2"):
-            pass
-        elif logfile["path"].lower().endswith(".xz"):
-            pass
-        else:
-            with open(logfile["path"]) as fp:
-                for line in fp:
-                    if query in line:
-                        retval.append("<nobr>"+html.escape(line)+"</nobr>")
+        retval.append(f'<b>{logfile["path"]}</b>\n')
+        try:
+            if logfile["path"].lower().endswith(".gz"):
+                with gzip.open(logfile["path"], "rb") as fp:
+                    search_in_file(fp, query_re, display)
+            elif logfile["path"].lower().endswith(".bz2"):
+                with bz2.open(logfile["path"], "rb") as fp:
+                    search_in_file(fp, query_re, display)
+            elif logfile["path"].lower().endswith(".xz"):
+                with subprocess.Popen([XZ, "-cd", logfile["path"]],
+                                      stdout=subprocess.PIPE) as proc:
+                    search_in_file(proc.stdout, query_re, display)
+            else:
+                with open(logfile["path"], "rb") as fp:
+                    search_in_file(fp, query_re, display)
+        except Exception as e:
+            return [f"Error: {html.escape(str(e))}"]
 
     return retval
 
@@ -113,6 +146,7 @@ def search(logfiles, fileselect, query, regex, ignorecase, limitlines,
 query = ""
 regex = False
 ignorecase = False
+invert = False
 filefilter = ""
 fileselect = []
 limitlines = 1000
@@ -124,6 +158,7 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     query = form.getvalue("query", query)
     regex = "regex" in form
     ignorecase = "ignorecase" in form
+    invert = "invert" in form
     filefilter = form.getvalue("filefilter", filefilter)
     fileselect = form.getlist("fileselect")
     tmp = form.getvalue("limitlines", str(limitlines))
@@ -132,8 +167,6 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     tmp = form.getvalue("limitmemory", str(limitmemory))
     if tmp.isnumeric():
         limitmemory = int(tmp)
-    if form.getvalue("clear", "") == "Clear":
-        filefilter = ""
     dosearch = form.getvalue("search", "") == "Search"
 
 logfiles = LogFiles()
@@ -164,6 +197,7 @@ optgroup {
   font-family: monospace;
 }
 #result {
+  font-family: monospace;
   display: table-cell;
   vertical-align: top;
   border-top: 1px solid black;
@@ -176,10 +210,11 @@ optgroup {
 <div style="display:table-row; background-color:lightgray">
 <div style="display:table-cell">
 <input type="submit" name="apply" value="Apply" style="float:right">
-<input type="submit" name="clear" value="Clear" style="float:right">
+<input type="submit" name="clear" value="Clear" style="float:right"
+ onClick="document.getElementById('filefilter').value='';true;">
 <span style="overflow:hidden; display:block">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
- placeholder="Filter filenames..." style="width:100%"
+ placeholder="Filter filenames..." style="width:100%" id="filefilter"
  title="Use a regular expression to filter shown filenames">
 </span>
 </div>
@@ -190,6 +225,8 @@ optgroup {
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
  {('checked="checked"' if ignorecase else "")}> Ignore case
+<input type="checkbox" name="invert" style="margin-left:10px"
+ {('checked="checked"' if invert else "")}> Invert
 <input type="checkbox" name="regex" style="margin-left:10px"
  {('checked="checked"' if regex else "")}> Regular expression
 <input type="text" name="limitlines" value="{str(limitlines)}" size="4"
@@ -234,8 +271,8 @@ for logdir in sorted(logfiles.dir2files):
 result += f"""</select>
 </div>
 <div id="result">
-{"<br>".join(search(logfiles, fileselect, query, regex, ignorecase, limitlines,
-                    limitmemory)) if dosearch else ""}
+{"<br>".join(search(logfiles, fileselect, query, ignorecase, invert, regex,
+                    limitlines, limitmemory)) if dosearch else ""}
 </div>
 </div>
 
