@@ -81,24 +81,30 @@ def traverse_logdir(logdir, max_name_indent_len, shown_files, total_files,
             total_bytes, shown_dirs, total_dirs, logfiles)
 
 
-filefilter = ""
 query = ""
+ignorecase = False
+filefilter = ""
+fileselect = []
 limitlines = 1000
 limitmemory = 1
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
-    cgi = cgi.FieldStorage()
-    filefilter = cgi.getvalue("filefilter", filefilter)
-    query = cgi.getvalue("query", query)
-    if cgi.getvalue("clear", "") == "Clear":
-        filefilter = ""
-    tmp = cgi.getvalue("limitlines", str(limitlines))
+    form = cgi.FieldStorage()
+    query = form.getvalue("query", query)
+    ignorecase = "ignorecase" in form
+    filefilter = form.getvalue("filefilter", filefilter)
+    fileselect = form.getlist("fileselect")
+    tmp = form.getvalue("limitlines", str(limitlines))
     if tmp.isnumeric():
         limitlines = int(tmp)
-    tmp = cgi.getvalue("limitmemory", str(limitmemory))
+    tmp = form.getvalue("limitmemory", str(limitmemory))
     if tmp.isnumeric():
         limitmemory = int(tmp)
-    
+    if form.getvalue("clear", "") == "Clear":
+        filefilter = ""
+    if form.getvalue("search", "") == "Search":
+        pass
+
 
 logfiles = {}
 max_name_indent_len = 0
@@ -108,10 +114,14 @@ shown_bytes = 0
 total_bytes = 0
 shown_dirs = 0
 total_dirs = 0
+all_logfiles = {}
 
 for logdir in LOGDIRS:
     shown_dirs += 1
     total_dirs += 1
+
+    if logdir.endswith(os.path.sep):
+        logdir = logdir[:-1]
 
     (max_name_indent_len, shown_files, total_files, shown_bytes, total_bytes,
      shown_dirs, total_dirs, childs) = traverse_logdir(
@@ -119,6 +129,8 @@ for logdir in LOGDIRS:
         total_bytes, shown_dirs, total_dirs, re.escape(filefilter))
 
     logfiles[logdir] = childs
+    all_logfiles = { **all_logfiles, **{k["path"]: logdir for k in filter(
+                     lambda k: "path" in k, logfiles[logdir])} }
 
 result = ("""<html>
 <head>
@@ -152,54 +164,60 @@ optgroup {
 <input type="submit" name="clear" value="Clear" style="float:right">
 <span style="overflow:hidden; display:block">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
-placeholder="Filter filenames..." style="width:100%"
-title="Use a regular expression to filter shown filenames">
+ placeholder="Filter filenames..." style="width:100%"
+ title="Use a regular expression to filter shown filenames">
 </span>
 </div>
 <div style="display:table-cell; width:100%; text-align:center">
 <input type="text" name="query" value="{(html.escape(query))}"
-placeholder="Search log entries..."
-title="Use a regular expression to search log entries">
-<input type="checkbox" name="ignorecase" style="margin-left:10px"> Ignore case
+ placeholder="Search log entries..."
+ title="Use a regular expression to search log entries">
+<input type="submit" name="search" value="Search" style="margin-left:10px">
+<input type="checkbox" name="ignorecase" style="margin-left:10px"
+ {('checked="checked"' if ignorecase else "")}> Ignore case
 <input type="text" name="limitlines" value="{str(limitlines)}" size="4"
-title="Limit search results to this number of lines"
-style="margin-left:10px; text-align:right"> line limit
+  title="Limit search results to this number of lines"
+ style="margin-left:10px; text-align:right"> line limit
 <input type="text" name="limitmemory" value="{str(limitmemory)}" size="4"
-title="Limit search results to this amount of memory"
-style="margin-left:10px; text-align:right"> MByte memory limit
+ title="Limit search results to this amount of memory"
+ style="margin-left:10px; text-align:right"> MByte memory limit
 <span style="float:right; font-size:small">
 <a href="https://ogris.de/loggruetze/" target="_blank">About LogGrütze...</a>
 </span>
 </div>
 </div>
 
-<div style="display:table-row; height:100%; background-color:red">
+<div style="display:table-row; height:100%">
 <div style="display:table-cell">
 <select name="fileselect" multiple
-style="font-family:monospace; height:100%">""")
+ style="font-family:monospace; height:100%">""")
 
 for logdir in sorted(logfiles):
     result += f'<optgroup label="{html.escape(logdir)}/">\n'
 
-    for i, logfile in enumerate(logfiles[logdir]):
+    for logfile in logfiles[logdir]:
         filler = (max_name_indent_len - 2 * logfile["indent"] -
                   len(logfile["name"]) + 1)
 
-        result += (f'<option style="background-color:#{"eee" if i%2==0 else "fff"}">{"&nbsp;" * 2 * logfile["indent"]}' +
-                   f'{logfile["name"]}{"&nbsp;" * filler}')
-
-        if "size_human" in logfile and "mtime_human" in logfile:
-            result += (f' {"&nbsp;" * (8 - len(logfile["size_human"]))}' +
+        if "path" in logfile:
+            selected = (' selected="selected"' if logfile["path"] in fileselect
+                        else "")
+            result += (f'<option value="{html.escape(logfile["path"])}"' +
+                       f'{selected}>{"&nbsp;" * 2 * logfile["indent"]}' +
+                       f'{html.escape(logfile["name"])}{"&nbsp;" * filler}' +
+                       f' {"&nbsp;" * (8 - len(logfile["size_human"]))}' +
                        f'{logfile["size_human"]}&nbsp;&nbsp;' +
-                       f'{logfile["mtime_human"]}&nbsp;')
-
-        result += "</option>\n"
+                       f'{logfile["mtime_human"]}&nbsp;</option>\n')
+        else:
+            result += (f'<option>{"&nbsp;" * 2 * logfile["indent"]}' +
+                       f'{html.escape(logfile["name"])}</option>\n')
 
     result += "</optgroup>\n"
 
 result += f"""</select>
 </div>
 <div id="result">
+{"<br>".join(fileselect)}
 </div>
 </div>
 
