@@ -5,6 +5,17 @@ DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
 import sys, os, re, datetime, html, cgi
 
+class LogFiles:
+    dir2files = {}
+    file2dir = {}
+    max_name_indent_len = 0
+    shown_files = 0
+    total_files = 0
+    shown_bytes = 0
+    total_bytes = 0
+    shown_dirs = 0
+    total_dirs = 0
+
 def bytes_pretty(filesize):
     for suffix in ("B", "k", "M", "G", "T"):
         if filesize < 1024:
@@ -16,69 +27,65 @@ def logfile_sorter(entry):
     match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
     return -1 if match is None else int(match.group(1))
 
-def traverse_logdir(logdir, max_name_indent_len, shown_files, total_files,
-                    shown_bytes, total_bytes, shown_dirs, total_dirs,
-                    filefilter, subdir="", indent=0):
-    logfiles = []
-
+def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
     except Exception as e:
-        return (max_name_indent_len, shown_files, total_files, shown_bytes,
-                total_bytes, shown_dirs, total_dirs, logfiles)
+        return False
 
     entries = filter(lambda entry: not entry.name.startswith("."), entries)
     entries = sorted(entries, key=logfile_sorter)
     entries = sorted(entries, key=lambda entry: entry.name)
 
+    dir2files = logfiles.dir2files.setdefault(logdir, [])
+    found_files = False
+
     for entry in entries:
         relname = os.path.join(subdir, entry.name)
 
         if entry.is_dir(follow_symlinks=False):
-            total_dirs += 1
+            logfiles.total_dirs += 1
+            if (traverse_logdir(logdir, filefilter, logfiles, relname,
+                                indent + 1)):
+                logfiles.shown_dirs += 1
+                dir2files.append({
+                    "name"   : entry.name + "/",
+                    "indent" : indent })
 
-            (max_name_indent_len, shown_files, total_files, shown_bytes,
-             total_bytes, shown_dirs, total_dirs, childs) = traverse_logdir(
-                 logdir, max_name_indent_len, shown_files, total_files,
-                 shown_bytes, total_bytes, shown_dirs, total_dirs, filefilter,
-                 relname, indent + 1)
+                candid_name_indent_len = len(entry.name) + 1 + 2 * indent
+                if candid_name_indent_len > logfiles.max_name_indent_len:
+                    logfiles.max_name_indent_len = candid_name_indent_len
 
-            if len(childs) > 0:
-                shown_dirs += 1
-                logfiles.append({ "name"   : entry.name + "/",
-                                  "indent" : indent })
-
-                if len(entry.name) + 1 + 2 * indent > max_name_indent_len:
-                    max_name_indent_len = len(entry.name) + 1 + 2 * indent
-
-                logfiles += childs
         elif entry.is_file(follow_symlinks=False):
             stat = entry.stat(follow_symlinks=False)
-            total_files += 1
-            total_bytes += stat.st_size
+            logfiles.total_files += 1
+            logfiles.total_bytes += stat.st_size
+            logfiles.file2dir[entry.path] = logdir
 
             if (filefilter == "" or
                 re.search(filefilter, entry.name, re.IGNORECASE)):
-                shown_files += 1
-                shown_bytes += stat.st_size
+                found_files = True
+                logfiles.shown_files += 1
+                logfiles.shown_bytes += stat.st_size
                 size_human = bytes_pretty(stat.st_size)
 
                 mtime_human = datetime.datetime.fromtimestamp(
                                   stat.st_mtime).strftime(DATETIME_FMT)
 
-                logfiles.append({ "name"        : entry.name,
-                                  "indent"      : indent,
-                                  "path"        : entry.path,
-                                  "mtime"       : stat.st_mtime,
-                                  "mtime_human" : mtime_human,
-                                  "size"        : stat.st_size,
-                                  "size_human"  : size_human })
+                dir2files.append({
+                    "name"        : entry.name,
+                    "indent"      : indent,
+                    "path"        : entry.path,
+                    "mtime"       : stat.st_mtime,
+                    "mtime_human" : mtime_human,
+                    "size"        : stat.st_size,
+                    "size_human"  : size_human })
 
-                if len(entry.name) + 2 * indent > max_name_indent_len:
-                    max_name_indent_len = len(entry.name) + 2 * indent
+                candid_name_indent_len = len(entry.name) + 2 * indent
+                if candid_name_indent_len > logfiles.max_name_indent_len:
+                    logfiles.max_name_indent_len = candid_name_indent_len
 
-    return (max_name_indent_len, shown_files, total_files, shown_bytes,
-            total_bytes, shown_dirs, total_dirs, logfiles)
+    return found_files
 
 
 query = ""
@@ -106,31 +113,16 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         pass
 
 
-logfiles = {}
-max_name_indent_len = 0
-shown_files = 0
-total_files = 0
-shown_bytes = 0
-total_bytes = 0
-shown_dirs = 0
-total_dirs = 0
-all_logfiles = {}
+logfiles = LogFiles()
 
 for logdir in LOGDIRS:
-    shown_dirs += 1
-    total_dirs += 1
+    logfiles.shown_dirs += 1
+    logfiles.total_dirs += 1
 
     if logdir.endswith(os.path.sep):
         logdir = logdir[:-1]
 
-    (max_name_indent_len, shown_files, total_files, shown_bytes, total_bytes,
-     shown_dirs, total_dirs, childs) = traverse_logdir(
-        logdir, max_name_indent_len, shown_files, total_files, shown_bytes,
-        total_bytes, shown_dirs, total_dirs, re.escape(filefilter))
-
-    logfiles[logdir] = childs
-    all_logfiles = { **all_logfiles, **{k["path"]: logdir for k in filter(
-                     lambda k: "path" in k, logfiles[logdir])} }
+    traverse_logdir(logdir, re.escape(filefilter), logfiles)
 
 result = ("""<html>
 <head>
@@ -192,11 +184,11 @@ optgroup {
 <select name="fileselect" multiple
  style="font-family:monospace; height:100%">""")
 
-for logdir in sorted(logfiles):
+for logdir in sorted(logfiles.dir2files):
     result += f'<optgroup label="{html.escape(logdir)}/">\n'
 
-    for logfile in logfiles[logdir]:
-        filler = (max_name_indent_len - 2 * logfile["indent"] -
+    for logfile in logfiles.dir2files[logdir]:
+        filler = (logfiles.max_name_indent_len - 2 * logfile["indent"] -
                   len(logfile["name"]) + 1)
 
         if "path" in logfile:
@@ -223,9 +215,9 @@ result += f"""</select>
 
 <div style="display:table-row; background-color:lightgray">
 <div style="display:table-cell">
-{shown_files}/{total_files} files
-({bytes_pretty(shown_bytes)}/{bytes_pretty(total_bytes)}),
-{shown_dirs}/{total_dirs} folders shown
+{logfiles.shown_files}/{logfiles.total_files} files
+({bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
+{logfiles.shown_dirs}/{logfiles.total_dirs} folders shown
 </div>
 <div style="display:table-cell">
 0 (0B) shown, 0 (0B) matching, 0 (0B) total entries in 0 selected log files
