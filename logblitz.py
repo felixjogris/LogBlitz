@@ -191,24 +191,34 @@ html, body, form {
   height: 100%;
   width: 100%;
   font-family: sans-serif;
-  display: table;
 }
-optgroup {
+select, optgroup {
   font-family: monospace;
+}
+select {
+  height: 100%;
 }
 #result {
   font-family: monospace;
-  display: table-cell;
   vertical-align: top;
-  border-top: 1px solid black;
+  overflow: scroll;
+}
+.sbt, .sbb {
+  background-color: lightgray;
+}
+.sbt {
   border-bottom: 1px solid black;
+}
+.sbb {
+  border-top: 1px solid black;
 }
 </style>
 </head>""" +
           f"""<body>
 <form method="POST">
-<div style="display:table-row; background-color:lightgray">
-<div style="display:table-cell">
+<div style="height:100%; display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr">
+
+<div class="sbt">
 <input type="submit" name="apply" value="Apply" style="float:right">
 <input type="submit" name="clear" value="Clear" style="float:right"
  onClick="document.getElementById('filefilter').value='';true;">
@@ -218,7 +228,8 @@ optgroup {
  title="Use a regular expression to filter shown filenames">
 </span>
 </div>
-<div style="display:table-cell; width:100%; text-align:center">
+
+<div class="sbt">
 <input type="text" name="query" value="{(html.escape(query))}"
  placeholder="Search log entries..."
  title="Enter an expression to search log entries">
@@ -239,12 +250,9 @@ optgroup {
 <a href="https://ogris.de/logblitz/" target="_blank">About LogBlitz...</a>
 </span>
 </div>
-</div>
 
-<div style="display:table-row; height:100%">
-<div style="display:table-cell">
-<select name="fileselect" multiple
- style="font-family:monospace; height:100%">""")
+<div>
+<select name="fileselect" multiple>""")
 
 for logdir in sorted(logfiles.dir2files):
     result += f'<optgroup label="{html.escape(logdir)}/">\n'
@@ -270,26 +278,26 @@ for logdir in sorted(logfiles.dir2files):
 
 result += f"""</select>
 </div>
+
 <div id="result">
 {"<br>".join(search(logfiles, fileselect, query, ignorecase, invert, regex,
                     limitlines, limitmemory)) if dosearch else ""}
 </div>
-</div>
 
-<div style="display:table-row; background-color:lightgray">
-<div style="display:table-cell">
+<div class="sbb">
 {logfiles.shown_files}/{logfiles.total_files} files
 ({bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
 {logfiles.shown_dirs}/{logfiles.total_dirs} folders shown
 </div>
-<div style="display:table-cell">
+
+<div class="sbb">
 0 (0B) shown, 0 (0B) matching, 0 (0B) total entries in 0 selected log files
 <span style="float:right">
 Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </span>
 </div>
-</div>
 
+</div>
 </body>
 </html>"""
 
