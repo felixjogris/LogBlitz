@@ -17,7 +17,7 @@ class LogFiles:
     total_dirs = 0
 
 def bytes_pretty(filesize):
-    for suffix in ("B", "k", "M", "G", "T"):
+    for suffix in ("B", "KiB", "MiB", "GiB", "TiB"):
         if filesize < 1024:
             break
         filesize /= 1024
@@ -94,35 +94,63 @@ def search_in_file(fp, query_re, display):
         except Exception as _:
             decoded_line = line.decode("ascii")
 
-        display(query_re.search(decoded_line), decoded_line)
+        display(query_re.search(decoded_line), decoded_line, line)
 
 def search(logfiles, fileselect, query, ignorecase, invert, regex,
            limitlines, limitmemory):
-    retval = []
+    html_lines = []
+    shown_lines = [0]
+    shown_bytes = [0]
+    matching_lines = [0]
+    matching_bytes = [0]
+    total_lines = [0]
+    total_bytes = [0]
+    num_logfiles = [0]
+
+    limit_bytes = limitmemory * 1000 * 1000
 
     try:
         query_re = re.compile(query if regex else re.escape(query),
                               re.IGNORECASE if ignorecase else 0)
     except Exception as e:
-        return [f"Error: Invalid regex: {html.escape(str(e))}"]
+        return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
 
     if invert:
-        def display(match, line):
+        def display(match, line, raw_line):
+            total_lines[0] += 1
+            total_bytes[0] += len(raw_line)
             if match is None:
-                retval.append(f"<nobr>{html.escape(line)}</nobr>")
+                matching_lines[0] += 1
+                matching_bytes[0] += len(raw_line)
+                if (limitlines > shown_lines[0] and
+                    limit_bytes > shown_bytes[0]):
+                    shown_lines[0] += 1
+                    shown_bytes[0] += len(raw_line)
+                    html_lines.append(f"<nobr>{html.escape(line)}</nobr>")
     else:
-        def display(match, line):
+        def display(match, line, raw_line):
+            total_lines[0] += 1
+            total_bytes[0] += len(raw_line)
             if not match is None:
-                s, e = match.start(), match.end()
-                retval.append(f"<nobr>{html.escape(line[:s])}" +
-                              f'<b class="sr">{html.escape(line[s:e])}</b>' +
-                              f"{html.escape(line[e:])}</nobr>")
+                matching_lines[0] += 1
+                matching_bytes[0] += len(raw_line)
+                if (limitlines > shown_lines[0] and
+                    limit_bytes > shown_bytes[0]):
+                    shown_lines[0] += 1
+                    shown_bytes[0] += len(raw_line)
+                    s, e = match.start(), match.end()
+                    html_lines.append(
+                        f"<nobr>{html.escape(line[:s])}"
+                        f'<b class="sr">{html.escape(line[s:e])}</b>'
+                        f"{html.escape(line[e:])}</nobr>")
 
     for logfile in filter(lambda logfile: "path" in logfile and
                           logfile["path"] in fileselect,
                           [logfile for logfile in logfiles.dir2files[logdir]
                            for logdir in LOGDIRS]):
-        retval.append(f'<b>{logfile["path"]}</b>\n')
+        num_logfiles[0] += 1
+        html_lines.append(f'<b>{logfile["path"]}</b>\n')
+
         try:
             if logfile["path"].lower().endswith(".gz"):
                 with gzip.open(logfile["path"], "rb") as fp:
@@ -138,9 +166,18 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
                 with open(logfile["path"], "rb") as fp:
                     search_in_file(fp, query_re, display)
         except Exception as e:
-            return [f"Error: {html.escape(str(e))}"]
+            return "", (f"Error: {html.escape(str(e))}",)
 
-    return retval
+    html_status = ("<span"
+        f"""{' class="red"' if shown_lines[0] >= limitlines else ""}>"""
+        f"{shown_lines[0]}</span> (<span"
+        f"""{' class="red"' if shown_bytes[0] >= limit_bytes else ""}>"""
+        f"{bytes_pretty(shown_bytes[0])}</span>) shown, {matching_lines[0]} "
+        f"({bytes_pretty(matching_bytes[0])}) matching, {total_lines[0]} "
+        f"({bytes_pretty(total_bytes[0])}) total entries in "
+        f"{num_logfiles[0]} selected log files")
+
+    return html_status, html_lines
 
 
 query = ""
@@ -151,7 +188,6 @@ filefilter = ""
 fileselect = []
 limitlines = 1000
 limitmemory = 1
-dosearch = False
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -167,7 +203,6 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     tmp = form.getvalue("limitmemory", str(limitmemory))
     if tmp.isnumeric():
         limitmemory = int(tmp)
-    dosearch = form.getvalue("search", "") == "Search"
 
 logfiles = LogFiles()
 
@@ -179,6 +214,9 @@ for logdir in LOGDIRS:
 
     if traverse_logdir(logdir, re.escape(filefilter), logfiles):
         logfiles.shown_dirs += 1
+
+html_status, html_lines = search(logfiles, fileselect, query, ignorecase,
+                                 invert, regex, limitlines, limitmemory)
 
 result = ("""<html>
 <head>
@@ -215,16 +253,19 @@ select {
 .sr {
   background-color: lightyellow;
 }
+.red {
+  color: red;
+}
 </style>
-</head>""" +
+</head>"""
           f"""<body>
 <form method="POST">
 <div style="height:100%; display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr">
 
 <div class="sbt">
 <input type="submit" name="apply" value="Apply" style="float:right">
-<input type="submit" name="clear" value="Clear" style="float:right"
- onClick="document.getElementById('filefilter').value='';true;">
+<input type="button" value="Clear" style="float:right"
+ onClick="document.getElementById('filefilter').value='';false;">
 <span style="overflow:hidden; display:block">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
  placeholder="Filter filenames..." style="width:100%" id="filefilter"
@@ -267,14 +308,14 @@ for logdir in sorted(logfiles.dir2files):
         if "path" in logfile:
             selected = (' selected="selected"' if logfile["path"] in fileselect
                         else "")
-            result += (f'<option value="{html.escape(logfile["path"])}"' +
-                       f'{selected}>{"&nbsp;" * 2 * logfile["indent"]}' +
-                       f'{html.escape(logfile["name"])}{"&nbsp;" * filler}' +
-                       f' {"&nbsp;" * (8 - len(logfile["size_human"]))}' +
-                       f'{logfile["size_human"]}&nbsp;&nbsp;' +
+            result += (f'<option value="{html.escape(logfile["path"])}"'
+                       f'{selected}>{"&nbsp;" * 2 * logfile["indent"]}'
+                       f'{html.escape(logfile["name"])}{"&nbsp;" * filler}'
+                       f' {"&nbsp;" * (8 - len(logfile["size_human"]))}'
+                       f'{logfile["size_human"]}&nbsp;&nbsp;'
                        f'{logfile["mtime_human"]}&nbsp;</option>\n')
         else:
-            result += (f'<option>{"&nbsp;" * 2 * logfile["indent"]}' +
+            result += (f'<option>{"&nbsp;" * 2 * logfile["indent"]}'
                        f'{html.escape(logfile["name"])}</option>\n')
 
     result += "</optgroup>\n"
@@ -283,8 +324,7 @@ result += f"""</select>
 </div>
 
 <div id="result">
-{"<br>".join(search(logfiles, fileselect, query, ignorecase, invert, regex,
-                    limitlines, limitmemory)) if dosearch else ""}
+{"<br>".join(html_lines)}
 </div>
 
 <div class="sbb">
@@ -294,16 +334,17 @@ result += f"""</select>
 </div>
 
 <div class="sbb">
-0 (0B) shown, 0 (0B) matching, 0 (0B) total entries in {len(logfiles)} selected log files
+{html_status}
 <span style="float:right">
 Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </span>
 </div>
 
 </div>
+</form>
 </body>
 </html>"""
 
-print("Content-Type: text/html; charset=utf-8\n" +
+print("Content-Type: text/html; charset=utf-8\n"
       f'Content-Length: {len(result.encode("utf-8"))}\n')
 print(result, end="")
