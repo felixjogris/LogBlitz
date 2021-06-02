@@ -115,7 +115,7 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
             if not match is None:
                 s, e = match.start(), match.end()
                 retval.append(f"<nobr>{html.escape(line[:s])}" +
-                              f'<b style="background-color:lightyellow">{html.escape(line[s:e])}</b>' +
+                              f'<b class="sr">{html.escape(line[s:e])}</b>' +
                               f"{html.escape(line[e:])}</nobr>")
 
     for logfile in filter(lambda logfile: "path" in logfile and
@@ -212,6 +212,9 @@ select {
 .sbb {
   border-top: 1px solid black;
 }
+.sr {
+  background-color: lightyellow;
+}
 </style>
 </head>""" +
           f"""<body>
@@ -291,7 +294,7 @@ result += f"""</select>
 </div>
 
 <div class="sbb">
-0 (0B) shown, 0 (0B) matching, 0 (0B) total entries in 0 selected log files
+0 (0B) shown, 0 (0B) matching, 0 (0B) total entries in {len(logfiles)} selected log files
 <span style="float:right">
 Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </span>
