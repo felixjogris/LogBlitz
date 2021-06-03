@@ -17,10 +17,12 @@ class LogFiles:
     total_dirs = 0
 
 def bytes_pretty(filesize):
-    for suffix in ("B", "KiB", "MiB", "GiB", "TiB"):
+    if filesize < 1024:
+        return f"{filesize}B"
+    for suffix in ("K", "M", "G", "T"):
+        filesize /= 1024
         if filesize < 1024:
             break
-        filesize /= 1024
     return f"{filesize:.2f}{suffix}"
 
 def logfile_sorter(entry):
@@ -107,7 +109,8 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
     total_bytes = [0]
     num_logfiles = [0]
 
-    limit_bytes = limitmemory * 1000 * 1000
+    limit_lines = None if limitlines == "" else int(limitlines)
+    limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
 
     try:
         query_re = re.compile(query if regex else re.escape(query),
@@ -122,8 +125,8 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
             if match is None:
                 matching_lines[0] += 1
                 matching_bytes[0] += len(raw_line)
-                if (limitlines > shown_lines[0] and
-                    limit_bytes > shown_bytes[0]):
+                if ((limit_lines is None or limit_lines > shown_lines[0]) and
+                    (limit_bytes is None or limit_bytes > shown_bytes[0])):
                     shown_lines[0] += 1
                     shown_bytes[0] += len(raw_line)
                     html_lines.append(f"<nobr>{html.escape(line)}</nobr>")
@@ -134,8 +137,8 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
             if not match is None:
                 matching_lines[0] += 1
                 matching_bytes[0] += len(raw_line)
-                if (limitlines > shown_lines[0] and
-                    limit_bytes > shown_bytes[0]):
+                if ((limit_lines is None or limit_lines > shown_lines[0]) and
+                    (limit_bytes is None or limit_bytes > shown_bytes[0])):
                     shown_lines[0] += 1
                     shown_bytes[0] += len(raw_line)
                     s, e = match.start(), match.end()
@@ -169,13 +172,16 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
             return "", (f"Error: {html.escape(str(e))}",)
 
     html_status = ("<span"
-        f"""{' class="red"' if shown_lines[0] >= limitlines else ""}>"""
+        f"""{' class="red"' if not limit_lines is None and
+                               shown_lines[0] >= limit_lines else ""}>"""
         f"{shown_lines[0]}</span> (<span"
-        f"""{' class="red"' if shown_bytes[0] >= limit_bytes else ""}>"""
-        f"{bytes_pretty(shown_bytes[0])}</span>) shown, {matching_lines[0]} "
-        f"({bytes_pretty(matching_bytes[0])}) matching, {total_lines[0]} "
-        f"({bytes_pretty(total_bytes[0])}) total entries in "
-        f"{num_logfiles[0]} selected log files")
+        f"""{' class="red"' if not limit_bytes is None and
+                               shown_bytes[0] >= limit_bytes else ""}>"""
+        f"{bytes_pretty(shown_bytes[0])}</span>) lines shown, "
+        f"{matching_lines[0]} ({bytes_pretty(matching_bytes[0])}) matching, "
+        f"{total_lines[0]} ({bytes_pretty(total_bytes[0])}) total entries in "
+        f"{num_logfiles[0]} selected log file"
+        f'{"" if num_logfiles[0] == 1 else "s"}')
 
     return html_status, html_lines
 
@@ -186,8 +192,8 @@ ignorecase = False
 invert = False
 filefilter = ""
 fileselect = []
-limitlines = 1000
-limitmemory = 1
+limitlines = "1000"
+limitmemory = "1"
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -195,14 +201,14 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     regex = "regex" in form
     ignorecase = "ignorecase" in form
     invert = "invert" in form
-    filefilter = form.getvalue("filefilter", filefilter)
+    filefilter = form.getvalue("filefilter", "")
     fileselect = form.getlist("fileselect")
-    tmp = form.getvalue("limitlines", str(limitlines))
-    if tmp.isnumeric():
-        limitlines = int(tmp)
-    tmp = form.getvalue("limitmemory", str(limitmemory))
-    if tmp.isnumeric():
-        limitmemory = int(tmp)
+    tmp = form.getvalue("limitlines", "")
+    if tmp == "" or tmp.isnumeric():
+        limitlines = tmp
+    tmp = form.getvalue("limitmemory", "")
+    if tmp == "" or tmp.isnumeric():
+        limitmemory = tmp
 
 logfiles = LogFiles()
 
@@ -263,19 +269,14 @@ select {
 <div style="height:100%; display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr">
 
 <div class="sbt">
-<input type="submit" name="apply" value="Apply" style="float:right">
-<input type="button" value="Clear" style="float:right"
- onClick="document.getElementById('filefilter').value='';false;">
-<span style="overflow:hidden; display:block">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
  placeholder="Filter filenames..." style="width:100%" id="filefilter"
  title="Use a regular expression to filter shown filenames">
-</span>
 </div>
 
 <div class="sbt">
 <input type="text" name="query" value="{(html.escape(query))}"
- placeholder="Search log entries..."
+ placeholder="Search log entries..." style="width:40em"
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
@@ -284,12 +285,12 @@ select {
  {('checked="checked"' if invert else "")}> Invert
 <input type="checkbox" name="regex" style="margin-left:10px"
  {('checked="checked"' if regex else "")}> Regular expression
-<input type="text" name="limitlines" value="{str(limitlines)}" size="4"
-  title="Limit search results to this number of lines"
- style="margin-left:10px; text-align:right"> line limit
-<input type="text" name="limitmemory" value="{str(limitmemory)}" size="4"
+<input type="text" name="limitlines" value="{html.escape(limitlines)}"
+ title="Limit search results to this number of lines"
+ style="margin-left:10px; text-align:right; width:4em"> line limit
+<input type="text" name="limitmemory" value="{html.escape(limitmemory)}"
  title="Limit search results to this amount of memory"
- style="margin-left:10px; text-align:right"> MByte memory limit
+ style="margin-left:10px; text-align:right; width:4em"> MiB memory limit
 <span style="float:right; font-size:small">
 <a href="https://ogris.de/logblitz/" target="_blank">About LogBlitz...</a>
 </span>
