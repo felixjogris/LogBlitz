@@ -179,7 +179,7 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
                                shown_bytes[0] >= limit_bytes else ""}>"""
         f"{bytes_pretty(shown_bytes[0])}</span>) lines shown, "
         f"{matching_lines[0]} ({bytes_pretty(matching_bytes[0])}) matching, "
-        f"{total_lines[0]} ({bytes_pretty(total_bytes[0])}) total entries in "
+        f"{total_lines[0]} ({bytes_pretty(total_bytes[0])}) total lines in "
         f"{num_logfiles[0]} selected log file"
         f'{"" if num_logfiles[0] == 1 else "s"}')
 
