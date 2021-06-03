@@ -280,17 +280,28 @@ select {
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
- {('checked="checked"' if ignorecase else "")}> Ignore case
+ {('checked="checked"' if ignorecase else "")}
+ title="Search log entries regardless of case">
+<span title="Search log entries regardless of case">Ignore case</span>
 <input type="checkbox" name="invert" style="margin-left:10px"
- {('checked="checked"' if invert else "")}> Invert
+ {('checked="checked"' if invert else "")}
+ title="Show log entries not matching the search expression">
+<span title="Show log entries not matching the search expression">Invert
+</span>
 <input type="checkbox" name="regex" style="margin-left:10px"
- {('checked="checked"' if regex else "")}> Regular expression
+ {('checked="checked"' if regex else "")}
+ title="Assume search expression is a regular expression">
+<span title="Assume search expression is a regular expression">Regular
+ expression</span>
 <input type="text" name="limitlines" value="{html.escape(limitlines)}"
  title="Limit search results to this number of lines"
- style="margin-left:10px; text-align:right; width:4em"> line limit
+ style="margin-left:10px; text-align:right; width:4em">
+<span title="Limit search results to this number of lines">line limit</span>
 <input type="text" name="limitmemory" value="{html.escape(limitmemory)}"
  title="Limit search results to this amount of memory"
- style="margin-left:10px; text-align:right; width:4em"> MiB memory limit
+ style="margin-left:10px; text-align:right; width:4em">
+<span title="Limit search results to this amount of memory">MiB memory
+ limit</span>
 <span style="float:right; font-size:small">
 <a href="https://ogris.de/logblitz/" target="_blank">About LogBlitz...</a>
 </span>
