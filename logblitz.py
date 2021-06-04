@@ -144,7 +144,7 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
                     s, e = match.start(), match.end()
                     html_lines.append(
                         f"<nobr>{html.escape(line[:s])}"
-                        f'<b class="sr">{html.escape(line[s:e])}</b>'
+                        f'<span class="sr">{html.escape(line[s:e])}</span>'
                         f"{html.escape(line[e:])}</nobr>")
 
     for logfile in filter(lambda logfile: "path" in logfile and
@@ -224,7 +224,8 @@ for logdir in LOGDIRS:
 html_status, html_lines = search(logfiles, fileselect, query, ignorecase,
                                  invert, regex, limitlines, limitmemory)
 
-result = ("""<html>
+result = ("""<!DOCTYPE html>
+<html>
 <head>
 <title>LogBlitz</title>
 <style type="text/css">
@@ -236,43 +237,55 @@ html, body, form {
   width: 100%;
   font-family: sans-serif;
 }
-select, optgroup {
+optgroup {
   font-family: monospace;
 }
-select {
-  height: 100%;
-}
-#result {
-  font-family: monospace;
-  vertical-align: top;
-  overflow: scroll;
-}
-.sbt, .sbb {
+.sbt, .sbb, .bar {
   background-color: lightgray;
 }
+.sbt, .sbb {
+  white-space: nowrap;
+  overflow: hidden;
+}
 .sbt {
-  border-bottom: 1px solid black;
+  border-bottom: 1px solid darkgray;
 }
 .sbb {
-  border-top: 1px solid black;
+  border-top: 1px solid darkgray;
 }
 .sr {
-  background-color: lightyellow;
+  font-weight: bold;
+  background-color: yellow;
 }
 .red {
   color: red;
+}
+.bar {
+  cursor: col-resize;
+  border-left: 1px solid darkgray;
+  border-right: 1px solid darkgray;
+}
+#barm {
+  background-image: url('data:image/svg+xml;utf8,<svg \\
+    xmlns="http://www.w3.org/2000/svg" width="4" height="50"> \\
+    <rect x="1" y="0" width="1" height="50" fill="gray" /></svg>');
+  background-repeat: repeat-x;
+  background-position: center;
 }
 </style>
 </head>"""
           f"""<body>
 <form method="POST">
-<div style="height:100%; display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr">
+<div style="height:100%; display:grid; grid-template-rows:auto 1fr auto;
+ grid-template-columns:auto 12px 1fr">
 
-<div class="sbt">
+<div class="sbt" id="filefilter">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
- placeholder="Filter filenames..." style="width:100%" id="filefilter"
+ placeholder="Filter filenames..." style="width:100%"
  title="Use a regular expression to filter shown filenames">
 </div>
+
+<div class="bar"></div>
 
 <div class="sbt">
 <input type="text" name="query" value="{(html.escape(query))}"
@@ -307,8 +320,9 @@ select {
 </span>
 </div>
 
-<div>
-<select name="fileselect" multiple>""")
+<div id="fileselect">
+<select name="fileselect" multiple 
+ style="font-family:monospace; height:100%; width:100%">""")
 
 for logdir in sorted(logfiles.dir2files):
     result += f'<optgroup label="{html.escape(logdir)}/">\n'
@@ -332,18 +346,22 @@ for logdir in sorted(logfiles.dir2files):
 
     result += "</optgroup>\n"
 
-result += f"""</select>
+result += (f"""</select>
 </div>
 
-<div id="result">
+<div class="bar" id="barm"></div>
+
+<div style="font-family: monospace; vertical-align: top; overflow: scroll">
 {"<br>".join(html_lines)}
 </div>
 
-<div class="sbb">
+<div class="sbb" id="filestatus">
 {logfiles.shown_files}/{logfiles.total_files} files
 ({bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
 {logfiles.shown_dirs}/{logfiles.total_dirs} folders shown
 </div>
+
+<div class="bar"></div>
 
 <div class="sbb">
 {html_status}
@@ -354,8 +372,37 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 
 </div>
 </form>
-</body>
-</html>"""
+</body>"""
+"""<script>
+document.querySelectorAll(".bar").forEach(function (elem) {
+  elem.onmousedown = function (ev) {
+    var fileFilter = document.getElementById("filefilter");
+    var fileSelect = document.getElementById("fileselect");
+    var fileStatus = document.getElementById("filestatus");
+
+    var startWidth = Math.max(fileFilter.offsetWidth, fileSelect.offsetWidth);
+    startWidth = Math.max(startWidth, fileStatus.offsetWidth);
+
+    var startX = ev.clientX;
+
+    document.onmouseup = function (ev) {
+      document.onmouseup = null;
+      document.onmousemove = null;
+    };
+
+    document.onmousemove = function (ev) {
+      var width = startWidth + ev.clientX - startX;
+      if (width >= 20) {
+        width = width + "px";
+        fileFilter.style.width = width;
+        fileSelect.style.width = width;
+        fileStatus.style.width = width;
+      }
+    };
+  };
+});
+</script>
+</html>""")
 
 print("Content-Type: text/html; charset=utf-8\n"
       f'Content-Length: {len(result.encode("utf-8"))}\n')
