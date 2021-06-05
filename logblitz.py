@@ -52,7 +52,7 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
                                 indent + 1)):
                 logfiles.shown_dirs += 1
                 dir2files.insert(cnt, {
-                    "name"   : entry.name + "/",
+                    "name"   : entry.name + os.path.sep,
                     "indent" : indent })
 
                 candid_name_indent_len = len(entry.name) + 1 + 2 * indent
@@ -325,7 +325,7 @@ optgroup {
  style="font-family:monospace; height:100%; width:100%">""")
 
 for logdir in sorted(logfiles.dir2files):
-    result += f'<optgroup label="{html.escape(logdir)}/">\n'
+    result += f'<optgroup label="{html.escape(logdir)}{os.path.sep}">\n'
 
     for logfile in logfiles.dir2files[logdir]:
         filler = (logfiles.max_name_indent_len - 2 * logfile["indent"] -
