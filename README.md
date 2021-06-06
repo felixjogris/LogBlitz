@@ -5,6 +5,8 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
 
 ## Screenshot
 
+![web interface](https://ogris.de/logblitz/logblitz.jpg)
+
 ## Installation
 1. Put logblitz.py to the cgi-bin/ directory on you webserver, and make it executable
 2. Optionally, place favicon.ico to the htdocs/ directory
@@ -23,7 +25,8 @@ logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
 logdirs = /var/log/mysql
 ```
 
-Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs. The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
+Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
+The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql.
 
 ## Homepage
 
