@@ -25,8 +25,10 @@ logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
 logdirs = /var/log/mysql
 ```
 
-Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
-The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql.
+   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
+   The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql. LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
+
+4. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
 ## Homepage
 
