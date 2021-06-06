@@ -87,12 +87,12 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
     return found_files
 
-def search_in_file(fp, query_re, display):
+def search_in_file(fp, charset, query_re, display):
     for line in fp:
         try:
             decoded_line = line.decode("utf-8")
         except Exception as _:
-            decoded_line = line.decode("ascii")
+            decoded_line = line.decode(charset)
 
         display(query_re.search(decoded_line), decoded_line, line)
 
@@ -109,6 +109,7 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
 
     limit_lines = None if limitlines == "" else int(limitlines)
     limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
+    charset = defaults["charset"] if "charset" in defaults else "iso-8859-1"
 
     try:
         query_re = re.compile(query if regex else re.escape(query),
@@ -145,6 +146,13 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
                         f'<span class="sr">{html.escape(line[s:e])}</span>'
                         f"{html.escape(line[e:])}</nobr>")
 
+    # logfiles.dir2files is a dictionary whose keys reflect any logdir given
+    # in the config file
+    # each value is sorted list of dictionaries, where each dictionary denotes
+    # a logfile or a subdirectory, depending on whether the key "path" is set
+    # or not, respectively
+    # the inner filter() emits only those logdirs that contain logfiles
+    # the outer filter() emits only those logfiles that the user asked for
     for logfile in filter(
         lambda logfile: "path" in logfile and logfile["path"] in fileselect,
         [logfile for logdir in filter(
@@ -157,18 +165,18 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
         try:
             if logfile["path"].lower().endswith(".gz"):
                 with gzip.open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, query_re, display)
+                    search_in_file(fp, charset, query_re, display)
             elif logfile["path"].lower().endswith(".bz2"):
                 with bz2.open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, query_re, display)
+                    search_in_file(fp, charset, query_re, display)
             elif logfile["path"].lower().endswith(".xz") and "xz" in defaults:
                 with subprocess.Popen([defaults["xz"], "-cd",
                                        logfile["path"]],
                                       stdout=subprocess.PIPE) as proc:
-                    search_in_file(proc.stdout, query_re, display)
+                    search_in_file(proc.stdout, charset, query_re, display)
             else:
                 with open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, query_re, display)
+                    search_in_file(fp, charset, query_re, display)
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
