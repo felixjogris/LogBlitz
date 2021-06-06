@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-LOGDIRS = ("/var/log",)
-XZ = "/usr/bin/xz"
-DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
+import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
 
-import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess
+DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
 class LogFiles:
     dir2files = {}
@@ -98,8 +96,8 @@ def search_in_file(fp, query_re, display):
 
         display(query_re.search(decoded_line), decoded_line, line)
 
-def search(logfiles, fileselect, query, ignorecase, invert, regex,
-           limitlines, limitmemory):
+def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
+           regex, limitlines, limitmemory):
     html_lines = []
     shown_lines = [0]
     shown_bytes = [0]
@@ -147,10 +145,12 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
                         f'<span class="sr">{html.escape(line[s:e])}</span>'
                         f"{html.escape(line[e:])}</nobr>")
 
-    for logfile in filter(lambda logfile: "path" in logfile and
-                          logfile["path"] in fileselect,
-                          [logfile for logfile in logfiles.dir2files[logdir]
-                           for logdir in LOGDIRS]):
+    for logfile in filter(
+        lambda logfile: "path" in logfile and logfile["path"] in fileselect,
+        [logfile for logdir in filter(
+            lambda logdir: logdir in logfiles.dir2files, logdirs)
+         for logfile in logfiles.dir2files[logdir]]):
+
         num_logfiles[0] += 1
         html_lines.append(f'<b>{logfile["path"]}</b>\n')
 
@@ -161,8 +161,9 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
             elif logfile["path"].lower().endswith(".bz2"):
                 with bz2.open(logfile["path"], "rb") as fp:
                     search_in_file(fp, query_re, display)
-            elif logfile["path"].lower().endswith(".xz"):
-                with subprocess.Popen([XZ, "-cd", logfile["path"]],
+            elif logfile["path"].lower().endswith(".xz") and "xz" in defaults:
+                with subprocess.Popen([defaults["xz"], "-cd",
+                                       logfile["path"]],
                                       stdout=subprocess.PIPE) as proc:
                     search_in_file(proc.stdout, query_re, display)
             else:
@@ -185,6 +186,17 @@ def search(logfiles, fileselect, query, ignorecase, invert, regex,
 
     return html_status, html_lines
 
+
+configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
+                          "logblitz.ini")
+config = configparser.ConfigParser()
+config.read(configfile)
+
+remote_user = os.environ.get("REMOTE_USER", "DEFAULT")
+if config.has_option(remote_user, "logdirs"):
+    logdirs = config.get(remote_user, "logdirs").split(os.path.pathsep)
+else:
+    logdirs = []
 
 query = ""
 regex = False
@@ -212,7 +224,7 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
 
 logfiles = LogFiles()
 
-for logdir in LOGDIRS:
+for logdir in logdirs:
     logfiles.total_dirs += 1
 
     if logdir.endswith(os.path.sep):
@@ -221,8 +233,9 @@ for logdir in LOGDIRS:
     if traverse_logdir(logdir, re.escape(filefilter), logfiles):
         logfiles.shown_dirs += 1
 
-html_status, html_lines = search(logfiles, fileselect, query, ignorecase,
-                                 invert, regex, limitlines, limitmemory)
+html_status, html_lines = search(config.defaults(), logdirs, logfiles,
+                                 fileselect, query, ignorecase, invert, regex,
+                                 limitlines, limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>
