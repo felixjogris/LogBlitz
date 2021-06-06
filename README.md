@@ -12,18 +12,18 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
 2. Optionally, place favicon.ico to the htdocs/ directory
 3. Create etc/logblitz.ini, e.g.:
 
-```
-[DEFAULT]
-logdirs = /var/log:/var/www/localhost/logs
-xz = /usr/local/bin/xz
-charset = iso-8895-15
+   ```
+   [DEFAULT]
+   logdirs = /var/log:/var/www/localhost/logs
+   xz = /usr/local/bin/xz
+   charset = iso-8895-15
 
-[user1]
-logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
+   [user1]
+   logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
 
-[user2]
-logdirs = /var/log/mysql
-```
+   [user2]
+   logdirs = /var/log/mysql
+   ```
 
    Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
    The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql. LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
