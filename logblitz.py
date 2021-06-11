@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S-P/usr/local/bin python3
 
 import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
 
@@ -96,9 +96,10 @@ def search_in_file(fp, charset, query_re, display):
 
         display(query_re.search(decoded_line), decoded_line, line)
 
-def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
-           regex, limitlines, limitmemory):
+def search(defaults, logdirs, logfiles, fileselect, query, reverse,
+           ignorecase, invert, regex, limitlines, limitmemory):
     html_lines = []
+    display_lines = []
     shown_lines = [0]
     shown_bytes = [0]
     matching_lines = [0]
@@ -128,7 +129,7 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
                     (limit_bytes is None or limit_bytes > shown_bytes[0])):
                     shown_lines[0] += 1
                     shown_bytes[0] += len(raw_line)
-                    html_lines.append(f"<nobr>{html.escape(line)}</nobr>")
+                    display_lines.append(f"<nobr>{html.escape(line)}</nobr>")
     else:
         def display(match, line, raw_line):
             total_lines[0] += 1
@@ -141,7 +142,7 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
                     shown_lines[0] += 1
                     shown_bytes[0] += len(raw_line)
                     s, e = match.start(), match.end()
-                    html_lines.append(
+                    display_lines.append(
                         f"<nobr>{html.escape(line[:s])}"
                         f'<span class="sr">{html.escape(line[s:e])}</span>'
                         f"{html.escape(line[e:])}</nobr>")
@@ -160,7 +161,7 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
          for logfile in logfiles.dir2files[logdir]]):
 
         num_logfiles[0] += 1
-        html_lines.append(f'<b>{logfile["path"]}</b>\n')
+        display_lines = []
 
         try:
             if logfile["path"].lower().endswith(".gz"):
@@ -179,6 +180,9 @@ def search(defaults, logdirs, logfiles, fileselect, query, ignorecase, invert,
                     search_in_file(fp, charset, query_re, display)
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
+
+        html_lines.append(f'<b>{logfile["path"]}</b>\n')
+        html_lines += (reversed(display_lines) if reverse else display_lines)
 
     html_status = ("<span"
         f"""{' class="red"' if not limit_lines is None and
@@ -207,6 +211,7 @@ else:
     logdirs = []
 
 query = ""
+reverse = False
 regex = False
 ignorecase = False
 invert = False
@@ -218,9 +223,10 @@ limitmemory = "1"
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
     query = form.getvalue("query", query)
-    regex = "regex" in form
+    reverse = "reverse" in form
     ignorecase = "ignorecase" in form
     invert = "invert" in form
+    regex = "regex" in form
     filefilter = form.getvalue("filefilter", "")
     fileselect = form.getlist("fileselect")
     tmp = form.getvalue("limitlines", "")
@@ -242,8 +248,8 @@ for logdir in logdirs:
         logfiles.shown_dirs += 1
 
 html_status, html_lines = search(config.defaults(), logdirs, logfiles,
-                                 fileselect, query, ignorecase, invert, regex,
-                                 limitlines, limitmemory)
+                                 fileselect, query, reverse, ignorecase,
+                                 invert, regex, limitlines, limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>
@@ -313,6 +319,10 @@ optgroup {
  placeholder="Search log entries..." style="width:40em"
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
+<input type="checkbox" name="reverse" style="margin-left:10px"
+ {('checked="checked"' if reverse else "")}
+ title="Display latest log entries first">
+<span title="Display latest log entries first">Reverse</span>
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
  {('checked="checked"' if ignorecase else "")}
  title="Search log entries regardless of case">
