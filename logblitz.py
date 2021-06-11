@@ -404,7 +404,7 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 
 </div>
 </form>
-</body>"""
+"""
 """<script>
 document.querySelectorAll(".bar").forEach(function (elem) {
   elem.onmousedown = function (ev) {
@@ -434,6 +434,7 @@ document.querySelectorAll(".bar").forEach(function (elem) {
   };
 });
 </script>
+</body>
 </html>""")
 
 print("Content-Type: text/html; charset=utf-8\n"
