@@ -321,22 +321,25 @@ optgroup {
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <input type="checkbox" name="reverse" style="margin-left:10px"
- {('checked="checked"' if reverse else "")}
+ {('checked="checked"' if reverse else "")} id="reverse"
  title="Display latest log entries first">
-<span title="Display latest log entries first">Reverse</span>
+<span title="Display latest log entries first" onclick="toggle('reverse')">Reverse</span>
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
- {('checked="checked"' if ignorecase else "")}
+ {('checked="checked"' if ignorecase else "")} id="ignorecase"
  title="Search log entries regardless of case">
-<span title="Search log entries regardless of case">Ignore case</span>
+<span title="Search log entries regardless of case"
+ onclick="toggle('ignorecase')">Ignore case</span>
 <input type="checkbox" name="invert" style="margin-left:10px"
- {('checked="checked"' if invert else "")}
+ {('checked="checked"' if invert else "")} id="invert"
  title="Show log entries not matching the search expression">
-<span title="Show log entries not matching the search expression">Invert
+<span title="Show log entries not matching the search expression"
+ onclick="toggle('invert')">Invert
 </span>
 <input type="checkbox" name="regex" style="margin-left:10px"
- {('checked="checked"' if regex else "")}
+ {('checked="checked"' if regex else "")} id="regex"
  title="Assume search expression is a regular expression">
-<span title="Assume search expression is a regular expression">Regular
+<span title="Assume search expression is a regular expression"
+ onclick="toggle('regex')">Regular
  expression</span>
 <input type="text" name="limitlines" value="{html.escape(limitlines)}"
  title="Limit search results to this number of lines"
@@ -433,6 +436,14 @@ document.querySelectorAll(".bar").forEach(function (elem) {
     };
   };
 });
+
+function toggle (elemId)
+{
+  var elem = document.getElementById(elemId);
+  if (elem) {
+    elem.checked = !elem.checked;
+  }
+}
 </script>
 </body>
 </html>""")
