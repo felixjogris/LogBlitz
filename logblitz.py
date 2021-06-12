@@ -129,7 +129,8 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
                     (limit_bytes is None or limit_bytes > shown_bytes[0])):
                     shown_lines[0] += 1
                     shown_bytes[0] += len(raw_line)
-                    display_lines.append(f"<nobr>{html.escape(line)}</nobr>")
+                    display_lines.append('<div class="sl">'
+                                         f"{html.escape(line)}</div>\n")
     else:
         def display(match, line, raw_line):
             total_lines[0] += 1
@@ -143,9 +144,9 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
                     shown_bytes[0] += len(raw_line)
                     s, e = match.start(), match.end()
                     display_lines.append(
-                        f"<nobr>{html.escape(line[:s])}"
+                        f'<div class="sl">{html.escape(line[:s])}'
                         f'<span class="sr">{html.escape(line[s:e])}</span>'
-                        f"{html.escape(line[e:])}</nobr>")
+                        f"{html.escape(line[e:])}</div>\n")
 
     # logfiles.dir2files is a dictionary whose keys reflect any logdir given
     # in the config file
@@ -181,7 +182,7 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
-        html_lines.append(f'<b>{logfile["path"]}</b>\n')
+        html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
         html_lines += (reversed(display_lines) if reverse else display_lines)
 
     html_status = ("<span"
@@ -280,6 +281,12 @@ optgroup {
 }
 .sbb {
   border-top: 1px solid darkgray;
+}
+.lf {
+  font-weight: bold;
+}
+.sl, .sr {
+  white-space: pre;
 }
 .sr {
   font-weight: bold;
@@ -387,7 +394,7 @@ result += (f"""</select>
 <div class="bar" id="barm"></div>
 
 <div style="font-family: monospace; vertical-align: top; overflow: scroll">
-{"<br>".join(html_lines)}
+{"".join(html_lines)}
 </div>
 
 <div class="sbb" id="filestatus">
