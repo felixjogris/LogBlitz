@@ -87,19 +87,9 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
     return found_files
 
-def search_in_file(fp, charset, query_re, display):
-    for line in fp:
-        try:
-            decoded_line = line.decode("utf-8")
-        except Exception as _:
-            decoded_line = line.decode(charset)
-
-        display(query_re.search(decoded_line), decoded_line, line)
-
 def search(defaults, logdirs, logfiles, fileselect, query, reverse,
            ignorecase, invert, regex, limitlines, limitmemory):
     html_lines = []
-    display_lines = []
     shown_lines = [0]
     shown_bytes = [0]
     matching_lines = [0]
@@ -118,36 +108,6 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
     except Exception as e:
         return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
 
-    if invert:
-        def display(match, line, raw_line):
-            total_lines[0] += 1
-            total_bytes[0] += len(raw_line)
-            if match is None:
-                matching_lines[0] += 1
-                matching_bytes[0] += len(raw_line)
-                if ((limit_lines is None or limit_lines > shown_lines[0]) and
-                    (limit_bytes is None or limit_bytes > shown_bytes[0])):
-                    shown_lines[0] += 1
-                    shown_bytes[0] += len(raw_line)
-                    display_lines.append('<div class="sl">'
-                                         f"{html.escape(line)}</div>\n")
-    else:
-        def display(match, line, raw_line):
-            total_lines[0] += 1
-            total_bytes[0] += len(raw_line)
-            if not match is None:
-                matching_lines[0] += 1
-                matching_bytes[0] += len(raw_line)
-                if ((limit_lines is None or limit_lines > shown_lines[0]) and
-                    (limit_bytes is None or limit_bytes > shown_bytes[0])):
-                    shown_lines[0] += 1
-                    shown_bytes[0] += len(raw_line)
-                    s, e = match.start(), match.end()
-                    display_lines.append(
-                        f'<div class="sl">{html.escape(line[:s])}'
-                        f'<span class="sr">{html.escape(line[s:e])}</span>'
-                        f"{html.escape(line[e:])}</div>\n")
-
     # logfiles.dir2files is a dictionary whose keys reflect any logdir given
     # in the config file
     # each value is sorted list of dictionaries, where each dictionary denotes
@@ -162,28 +122,71 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
          for logfile in logfiles.dir2files[logdir]]):
 
         num_logfiles[0] += 1
-        display_lines = []
+        raw_lengths = []
+        lines = []
 
         try:
             if logfile["path"].lower().endswith(".gz"):
-                with gzip.open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, charset, query_re, display)
+                fp = gzip.open(logfile["path"], "rb")
             elif logfile["path"].lower().endswith(".bz2"):
-                with bz2.open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, charset, query_re, display)
+                fp = bz2.open(logfile["path"], "rb")
             elif logfile["path"].lower().endswith(".xz") and "xz" in defaults:
-                with subprocess.Popen([defaults["xz"], "-cd",
+                fp = subprocess.Popen([defaults["xz"], "-cd",
                                        logfile["path"]],
-                                      stdout=subprocess.PIPE) as proc:
-                    search_in_file(proc.stdout, charset, query_re, display)
+                                      stdout=subprocess.PIPE)
             else:
-                with open(logfile["path"], "rb") as fp:
-                    search_in_file(fp, charset, query_re, display)
+                fp = open(logfile["path"], "rb")
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
+        for raw_line in fp:
+            try:
+                line = raw_line.decode("utf-8")
+            except Exception as _:
+                line = raw_line.decode(charset)
+
+            total_lines[0] += 1
+            total_bytes[0] += len(raw_line)
+
+            match = query_re.search(line)
+            if (invert and match) or (not invert and not match):
+                continue
+
+            matching_lines[0] += 1
+            matching_bytes[0] += len(raw_line)
+
+            while (reverse and len(lines) > 0 and 
+                   ((limit_lines is not None and
+                     limit_lines <= shown_lines[0]) or
+                    (limit_bytes is not None and
+                     limit_bytes <= shown_bytes[0]))):
+                shown_lines[0] -= 1
+                shown_bytes[0] -= raw_lengths[0]
+                raw_lengths = raw_lengths[1:]
+                lines = lines[1:]
+
+            if ((limit_lines is None or limit_lines > shown_lines[0]) and
+                (limit_bytes is None or limit_bytes > shown_bytes[0])):
+                shown_lines[0] += 1
+                shown_bytes[0] += len(raw_line)
+                raw_lengths.append(len(raw_line))
+                lines.append((line, match))
+
+        if reverse:
+            lines = reversed(lines)
+
         html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
-        html_lines += (reversed(display_lines) if reverse else display_lines)
+        if invert:
+            for line in lines:
+                html_lines.append('<div class="sl">'
+                                  f"{html.escape(line[0])}</div>\n")
+        else:
+            for line in lines:
+                line, s, e = line[0], line[1].start(), line[1].end()
+                html_lines.append(
+                    f'<div class="sl">{html.escape(line[:s])}'
+                    f'<span class="sr">{html.escape(line[s:e])}</span>'
+                    f"{html.escape(line[e:])}</div>\n")
 
     html_status = ("<span"
         f"""{' class="red"' if not limit_lines is None and
