@@ -1,7 +1,7 @@
 # LogBlitz
 
 LogBlitz is a CGI script to search through your (sys-)log files. It is written in Python 3, and aims to be a webbased alter ego of grep, zgrep, bzgrep, xzgrep, and so on. You can configure multiple directories that contain logfiles, and you can give each HTTP authenticated user an individual set of log directories.
-LogBlitz does not interpret the log entries in any way, but sees them just as a bunch of text lines. No additional modules need to be installed as a default installation of Python 3.8 or 3.9 is sufficient. In order to read XZ compressed files, you need to have the xz binary installed, e.g. /usr/bin/xz on most Linux systems or on FreeBSD. The webinterface uses JavaScript just for the moveable divider between the filetree and the logview area.
+LogBlitz does not interpret the log entries in any way, but sees them just as a bunch of text lines. No additional modules need to be installed as a default installation of Python 3.8 or 3.9 is sufficient. The webinterface uses JavaScript just for the moveable divider between the filetree and the logview area.
 
 ## Screenshot
 
@@ -15,7 +15,6 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    ```
    [DEFAULT]
    logdirs = /var/log:/var/www/localhost/logs
-   xz = /usr/local/bin/xz
    charset = iso-8895-15
 
    [user1]
@@ -25,7 +24,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    logdirs = /var/log/mysql
    ```
 
-   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). The xz command is expected in /usr/local/bin. If you omit the *xz* option, you may not read xz compressed files. Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
+   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). Any log entry which is not valid UTF8, is expected to be an ISO-8895-15 compliant string.
    The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql. LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
 4. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
