@@ -1,6 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin python3
 
 import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
+import lzma
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -130,10 +131,8 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
                 fp = gzip.open(logfile["path"], "rb")
             elif logfile["path"].lower().endswith(".bz2"):
                 fp = bz2.open(logfile["path"], "rb")
-            elif logfile["path"].lower().endswith(".xz") and "xz" in defaults:
-                fp = subprocess.Popen([defaults["xz"], "-cd",
-                                       logfile["path"]],
-                                      stdout=subprocess.PIPE)
+            elif logfile["path"].lower().endswith(".xz"):
+                fp = lzma.open(logfile["path"], "rb")
             else:
                 fp = open(logfile["path"], "rb")
         except Exception as e:
