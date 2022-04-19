@@ -1,9 +1,10 @@
-#!/usr/bin/env -S-P/usr/local/bin python3
+#!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
 import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
 import lzma
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
+VERSION = "4"
 
 class LogFiles:
     dir2files = {}
@@ -28,13 +29,15 @@ def logfile_sorter(entry):
     match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
     return -1 if match is None else int(match.group(1))
 
-def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
+def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
+                    showunreadables, subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
     except Exception as _:
         return False
 
-    entries = filter(lambda entry: not entry.name.startswith("."), entries)
+    if not showdotfiles:
+        entries = filter(lambda entry: not entry.name.startswith("."), entries)
     entries = sorted(entries, key=logfile_sorter)
     entries = sorted(entries, key=lambda entry: entry.name)
 
@@ -47,8 +50,10 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
         if entry.is_dir(follow_symlinks=False):
             logfiles.total_dirs += 1
             cnt = len(dir2files)
-            if (traverse_logdir(logdir, filefilter, logfiles, relname,
-                                indent + 1)):
+            found_files = traverse_logdir(logdir, filefilter, logfiles,
+                                          showdotfiles, showunreadables,
+                                          relname, indent + 1)
+            if found_files:
                 logfiles.shown_dirs += 1
                 dir2files.insert(cnt, {
                     "name"   : entry.name + os.path.sep,
@@ -63,8 +68,10 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
             logfiles.total_files += 1
             logfiles.total_bytes += stat.st_size
 
-            if (filefilter == "" or
-                re.search(filefilter, entry.name, re.IGNORECASE)):
+            if ((filefilter == "" or
+                 re.search(filefilter, entry.name, re.IGNORECASE)) and
+                (showunreadables or
+                 os.access(entry.path, os.R_OK))):
                 found_files = True
                 logfiles.shown_files += 1
                 logfiles.shown_bytes += stat.st_size
@@ -88,7 +95,7 @@ def traverse_logdir(logdir, filefilter, logfiles, subdir="", indent=0):
 
     return found_files
 
-def search(defaults, logdirs, logfiles, fileselect, query, reverse,
+def search(charset, logdirs, logfiles, fileselect, query, reverse,
            ignorecase, invert, regex, limitlines, limitmemory):
     html_lines = []
     shown_lines = [0]
@@ -101,7 +108,6 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
 
     limit_lines = None if limitlines == "" else int(limitlines)
     limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
-    charset = defaults["charset"] if "charset" in defaults else "iso-8859-1"
 
     try:
         query_re = re.compile(query if regex else re.escape(query),
@@ -140,9 +146,9 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
 
         for raw_line in fp:
             try:
-                line = raw_line.decode("utf-8")
-            except Exception as _:
                 line = raw_line.decode(charset)
+            except Exception as _:
+                line = raw_line.decode("ascii")
 
             total_lines[0] += 1
             total_bytes[0] += len(raw_line)
@@ -160,9 +166,8 @@ def search(defaults, logdirs, logfiles, fileselect, query, reverse,
                     (limit_bytes is not None and
                      limit_bytes <= shown_bytes[0]))):
                 shown_lines[0] -= 1
-                shown_bytes[0] -= raw_lengths[0]
-                raw_lengths = raw_lengths[1:]
-                lines = lines[1:]
+                shown_bytes[0] -= raw_lengths.pop(0)
+                lines.pop(0)
 
             if ((limit_lines is None or limit_lines > shown_lines[0]) and
                 (limit_bytes is None or limit_bytes > shown_bytes[0])):
@@ -213,6 +218,11 @@ if config.has_option(remote_user, "logdirs"):
 else:
     logdirs = []
 
+if config.has_option(remote_user, "charset"):
+    charset = config.get(remote_user, "charset")
+else:
+    charset = "ascii"
+
 query = ""
 reverse = False
 regex = False
@@ -222,6 +232,8 @@ filefilter = ""
 fileselect = []
 limitlines = "1000"
 limitmemory = "1"
+showdotfiles = False
+showunreadables = False
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -230,6 +242,9 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     ignorecase = "ignorecase" in form
     invert = "invert" in form
     regex = "regex" in form
+    showdotfiles = "showdotfiles" in form
+    showunreadables = "showunreadables" in form
+    charset = form.getvalue("charset", charset)
     filefilter = form.getvalue("filefilter", "")
     fileselect = form.getlist("fileselect")
     tmp = form.getvalue("limitlines", "")
@@ -247,12 +262,13 @@ for logdir in logdirs:
     if logdir.endswith(os.path.sep):
         logdir = logdir[:-1]
 
-    if traverse_logdir(logdir, re.escape(filefilter), logfiles):
+    if traverse_logdir(logdir, re.escape(filefilter), logfiles, showdotfiles,
+                       showunreadables):
         logfiles.shown_dirs += 1
 
-html_status, html_lines = search(config.defaults(), logdirs, logfiles,
-                                 fileselect, query, reverse, ignorecase,
-                                 invert, regex, limitlines, limitmemory)
+html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
+                                 query, reverse, ignorecase, invert, regex,
+                                 limitlines, limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>
@@ -275,7 +291,6 @@ optgroup {
   background-color: lightgray;
 }
 .sbt, .sbb {
-  white-space: nowrap;
   overflow: hidden;
 }
 .sbt {
@@ -283,6 +298,9 @@ optgroup {
 }
 .sbb {
   border-top: 1px solid darkgray;
+}
+.box {
+  white-space: nowrap;
 }
 .lf {
   font-weight: bold;
@@ -318,8 +336,22 @@ optgroup {
 
 <div class="sbt" id="filefilter">
 <input type="text" name="filefilter" value="{(html.escape(filefilter))}"
- placeholder="Filter filenames..." style="width:100%"
+ placeholder="Filter filenames..." style="width:20em"
  title="Use a regular expression to filter shown filenames">
+<span class="box">
+<input type="checkbox" name="showdotfiles" style="margin-left:10px"
+ {('checked="checked"' if showdotfiles else "")} id="showdotfiles"
+ title="Show files and directories which names start with a dot">
+<span title="Show files and directories which names start with a dot"
+ onclick="toggle('showdotfiles')">Show dot files</span>
+</span>
+<span class="box">
+<input type="checkbox" name="showunreadables" style="margin-left:10px"
+ {('checked="checked"' if showunreadables else "")} id="showunreadables"
+ title="Show files and directories which are not accessible">
+<span title="Show files and directories which are not accessible"
+ onclick="toggle('showunreadables')">Show inaccessible files</span>
+</span>
 </div>
 
 <div class="bar"></div>
@@ -329,38 +361,56 @@ optgroup {
  placeholder="Search log entries..." style="width:40em"
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
+<span class="box">
 <input type="checkbox" name="reverse" style="margin-left:10px"
  {('checked="checked"' if reverse else "")} id="reverse"
  title="Display latest log entries first">
 <span title="Display latest log entries first" onclick="toggle('reverse')">Reverse</span>
+</span>
+<span class="box">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
  {('checked="checked"' if ignorecase else "")} id="ignorecase"
  title="Search log entries regardless of case">
 <span title="Search log entries regardless of case"
  onclick="toggle('ignorecase')">Ignore case</span>
+</span>
+<span class="box">
 <input type="checkbox" name="invert" style="margin-left:10px"
  {('checked="checked"' if invert else "")} id="invert"
  title="Show log entries not matching the search expression">
 <span title="Show log entries not matching the search expression"
  onclick="toggle('invert')">Invert
 </span>
+</span>
+<span class="box">
 <input type="checkbox" name="regex" style="margin-left:10px"
  {('checked="checked"' if regex else "")} id="regex"
  title="Assume search expression is a regular expression">
 <span title="Assume search expression is a regular expression"
  onclick="toggle('regex')">Regular
  expression</span>
+</span>
+<span class="box">
+<span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
+<input type="text" name="charset" value="{html.escape(charset)}"
+ title="Charset of logfiles" style="width:4em">
+</span>
+<span class="box">
 <input type="text" name="limitlines" value="{html.escape(limitlines)}"
  title="Limit search results to this number of lines"
  style="margin-left:10px; text-align:right; width:4em">
 <span title="Limit search results to this number of lines">line limit</span>
+</span>
+<span class="box">
 <input type="text" name="limitmemory" value="{html.escape(limitmemory)}"
  title="Limit search results to this amount of memory"
  style="margin-left:10px; text-align:right; width:4em">
 <span title="Limit search results to this amount of memory">MiB memory
  limit</span>
 <span style="float:right; font-size:small">
-<a href="https://ogris.de/logblitz/" target="_blank">About LogBlitz...</a>
+<a href="https://ogris.de/logblitz/"
+ target="_blank">About LogBlitz {VERSION}...</a>
+</span>
 </span>
 </div>
 
