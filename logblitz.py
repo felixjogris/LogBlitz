@@ -396,7 +396,7 @@ optgroup {
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
 <input type="text" name="charset" value="{html.escape(charset)}"
- title="Charset of logfiles" style="width:6em">
+ title="Charset of logfiles" style="width:7em">
 </span>
 <span class="box">
 <input type="text" name="limitlines" value="{html.escape(limitlines)}"
