@@ -15,7 +15,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    ```
    [DEFAULT]
    logdirs = /var/log:/var/www/localhost/logs
-   charset = iso-8895-15
+   charset = ISO-8859-15
 
    [user1]
    logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
@@ -24,7 +24,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    logdirs = /var/log/mysql
    ```
 
-   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). ISO-8859-1 is the default charset for any logfile. Every user can specify an alternate charset in the web interface. ASCII is used as internal fallback.
+   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). ISO-8859-15 is the default charset for any logfile. Every user can specify an alternate charset in the web interface. ISO-8859-1 is used as internal fallback.
    The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql. LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
 4. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.

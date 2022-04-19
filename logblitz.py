@@ -151,7 +151,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             try:
                 line = raw_line.decode(charset)
             except Exception as _:
-                line = raw_line.decode("ascii")
+                line = raw_line.decode("ISO-8859-1")
 
             total_lines[0] += 1
             total_bytes[0] += len(raw_line)
@@ -224,7 +224,7 @@ else:
 if config.has_option(remote_user, "charset"):
     charset = config.get(remote_user, "charset")
 else:
-    charset = "ascii"
+    charset = "ISO-8859-1"
 
 query = ""
 reverse = False
@@ -396,7 +396,7 @@ optgroup {
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
 <input type="text" name="charset" value="{html.escape(charset)}"
- title="Charset of logfiles" style="width:4em">
+ title="Charset of logfiles" style="width:6em">
 </span>
 <span class="box">
 <input type="text" name="limitlines" value="{html.escape(limitlines)}"
