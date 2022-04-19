@@ -68,10 +68,12 @@ def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
             logfiles.total_files += 1
             logfiles.total_bytes += stat.st_size
 
+            readable = os.access(entry.path, os.R_OK)
+
             if ((filefilter == "" or
                  re.search(filefilter, entry.name, re.IGNORECASE)) and
                 (showunreadables or
-                 os.access(entry.path, os.R_OK))):
+                 readable)):
                 found_files = True
                 logfiles.shown_files += 1
                 logfiles.shown_bytes += stat.st_size
@@ -82,6 +84,7 @@ def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
 
                 dir2files.append({
                     "name"        : entry.name,
+                    "readable"    : readable,
                     "indent"      : indent,
                     "path"        : entry.path,
                     "mtime"       : stat.st_mtime,
@@ -428,8 +431,10 @@ for logdir in sorted(logfiles.dir2files):
         if "path" in logfile:
             selected = (' selected="selected"' if logfile["path"] in fileselect
                         else "")
+            style = ("" if logfile["readable"] else
+                     ' style="text-decoration:line-through"')
             result += (f'<option value="{html.escape(logfile["path"])}"'
-                       f'{selected}>{"&nbsp;" * 2 * logfile["indent"]}'
+                       f'{selected}{style}>{"&nbsp;" * 2 * logfile["indent"]}'
                        f'{html.escape(logfile["name"])}{"&nbsp;" * filler}'
                        f' {"&nbsp;" * (8 - len(logfile["size_human"]))}'
                        f'{logfile["size_human"]}&nbsp;&nbsp;'
