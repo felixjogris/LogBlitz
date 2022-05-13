@@ -1,7 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
 import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
-import lzma
+import lzma, collections
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 VERSION = "4"
@@ -132,8 +132,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
          for logfile in logfiles.dir2files[logdir]]):
 
         num_logfiles += 1
-        raw_lengths = []
-        lines = []
+        lines = collections.deque()
 
         try:
             if logfile["path"].lower().endswith(".gz"):
@@ -169,18 +168,17 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
                     (limit_bytes is not None and
                      limit_bytes <= shown_bytes))):
                 shown_lines -= 1
-                shown_bytes -= raw_lengths.pop(0)
-                lines.pop(0)
+                l = lines.pop(0)
+                shown_bytes -= l[2]
 
             if ((limit_lines is None or limit_lines > shown_lines) and
                 (limit_bytes is None or limit_bytes > shown_bytes)):
                 shown_lines += 1
                 shown_bytes += len_raw_line
-                raw_lengths.append(len_raw_line)
-                lines.append((line, match))
+                lines.append((line, match, len_raw_line, line_number))
 
         if reverse:
-            lines = reversed(lines)
+            lines.reverse()
 
         html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
         if invert:
