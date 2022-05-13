@@ -101,13 +101,13 @@ def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
 def search(charset, logdirs, logfiles, fileselect, query, reverse,
            ignorecase, invert, regex, limitlines, limitmemory):
     html_lines = []
-    shown_lines = [0]
-    shown_bytes = [0]
-    matching_lines = [0]
-    matching_bytes = [0]
-    total_lines = [0]
-    total_bytes = [0]
-    num_logfiles = [0]
+    shown_lines = 0
+    shown_bytes = 0
+    matching_lines = 0
+    matching_bytes = 0
+    total_lines = 0
+    total_bytes = 0
+    num_logfiles = 0
 
     limit_lines = None if limitlines == "" else int(limitlines)
     limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
@@ -131,7 +131,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             lambda logdir: logdir in logfiles.dir2files, logdirs)
          for logfile in logfiles.dir2files[logdir]]):
 
-        num_logfiles[0] += 1
+        num_logfiles += 1
         raw_lengths = []
         lines = []
 
@@ -153,29 +153,29 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             except Exception as _:
                 line = raw_line.decode("ISO-8859-1")
 
-            total_lines[0] += 1
-            total_bytes[0] += len(raw_line)
+            total_lines += 1
+            total_bytes += len(raw_line)
 
             match = query_re.search(line)
             if (invert and match) or (not invert and not match):
                 continue
 
-            matching_lines[0] += 1
-            matching_bytes[0] += len(raw_line)
+            matching_lines += 1
+            matching_bytes += len(raw_line)
 
             while (reverse and len(lines) > 0 and 
                    ((limit_lines is not None and
-                     limit_lines <= shown_lines[0]) or
+                     limit_lines <= shown_lines) or
                     (limit_bytes is not None and
-                     limit_bytes <= shown_bytes[0]))):
-                shown_lines[0] -= 1
-                shown_bytes[0] -= raw_lengths.pop(0)
+                     limit_bytes <= shown_bytes))):
+                shown_lines -= 1
+                shown_bytes -= raw_lengths.pop(0)
                 lines.pop(0)
 
-            if ((limit_lines is None or limit_lines > shown_lines[0]) and
-                (limit_bytes is None or limit_bytes > shown_bytes[0])):
-                shown_lines[0] += 1
-                shown_bytes[0] += len(raw_line)
+            if ((limit_lines is None or limit_lines > shown_lines) and
+                (limit_bytes is None or limit_bytes > shown_bytes)):
+                shown_lines += 1
+                shown_bytes += len(raw_line)
                 raw_lengths.append(len(raw_line))
                 lines.append((line, match))
 
@@ -197,15 +197,15 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
 
     html_status = ("<span"
         f"""{' class="red"' if not limit_lines is None and
-                               shown_lines[0] >= limit_lines else ""}>"""
-        f"{shown_lines[0]}</span> (<span"
+                               shown_lines >= limit_lines else ""}>"""
+        f"{shown_lines}</span> (<span"
         f"""{' class="red"' if not limit_bytes is None and
-                               shown_bytes[0] >= limit_bytes else ""}>"""
-        f"{bytes_pretty(shown_bytes[0])}</span>) lines shown, "
-        f"{matching_lines[0]} ({bytes_pretty(matching_bytes[0])}) matching, "
-        f"{total_lines[0]} ({bytes_pretty(total_bytes[0])}) total lines in "
-        f"{num_logfiles[0]} selected log file"
-        f'{"" if num_logfiles[0] == 1 else "s"}')
+                               shown_bytes >= limit_bytes else ""}>"""
+        f"{bytes_pretty(shown_bytes)}</span>) lines shown, "
+        f"{matching_lines} ({bytes_pretty(matching_bytes)}) matching, "
+        f"{total_lines} ({bytes_pretty(total_bytes)}) total lines in "
+        f"{num_logfiles} selected log file"
+        f'{"" if num_logfiles == 1 else "s"}')
 
     return html_status, html_lines
 
