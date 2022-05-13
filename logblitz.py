@@ -147,7 +147,9 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
+        line_number = 0
         for raw_line in fp:
+            line_number += 1
             len_raw_line = len(raw_line)
             line = raw_line.decode(charset, errors="replace")
 
