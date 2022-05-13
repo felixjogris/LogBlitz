@@ -232,6 +232,7 @@ else:
 query = ""
 reverse = False
 regex = False
+showlinenumbers = True
 ignorecase = False
 invert = False
 filefilter = ""
@@ -248,6 +249,7 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     ignorecase = "ignorecase" in form
     invert = "invert" in form
     regex = "regex" in form
+    showlinenumbers = "showlinenumbers" in form
     showdotfiles = "showdotfiles" in form
     showunreadables = "showunreadables" in form
     charset = form.getvalue("charset", charset)
@@ -321,6 +323,9 @@ optgroup {
 .ln {
   margin-right: 2em;
   -webkit-user-select: none;
+  display: """
+        f'{"inline" if showlinenumbers else "none"}'
+""";
 }
 .red {
   color: red;
@@ -397,8 +402,15 @@ optgroup {
  {('checked="checked"' if regex else "")} id="regex"
  title="Assume search expression is a regular expression">
 <span title="Assume search expression is a regular expression"
- onclick="toggle('regex')">Regular
- expression</span>
+ onclick="toggle('regex')">Regular expression</span>
+</span>
+<span class="box">
+<input type="checkbox" name="showlinenumbers" style="margin-left:10px"
+ {('checked="checked"' if showlinenumbers else "")} id="showlinenumbers"
+ title="Show line numbers" onchange="toggleCssClass('showlinenumbers', 'ln')">
+<span title="Show line numbers"
+ onclick="toggle('showlinenumbers');
+          toggleCssClass('showlinenumbers', 'ln');">Show line numbers</span>
 </span>
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
@@ -515,6 +527,19 @@ function toggle (elemId)
     elem.checked = !elem.checked;
   }
 }
+
+function toggleCssClass (elemId, className)
+{
+  var elem = document.getElementById(elemId);
+  if (elem) {
+    var display = (elem.checked ? "inline" : "none");
+    var elems = document.getElementsByClassName(className);
+    for (i = 0; i < elems.length; i++) {
+      elems[i].style.display = display;
+    }
+  }
+}
+
 </script>
 </body>
 </html>""")
