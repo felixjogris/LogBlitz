@@ -148,17 +148,18 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             return "", (f"Error: {html.escape(str(e))}",)
 
         for raw_line in fp:
+            len_raw_line = len(raw_line)
             line = raw_line.decode(charset, errors="replace")
 
             total_lines += 1
-            total_bytes += len(raw_line)
+            total_bytes += len_raw_line
 
             match = query_re.search(line)
             if (invert and match) or (not invert and not match):
                 continue
 
             matching_lines += 1
-            matching_bytes += len(raw_line)
+            matching_bytes += len_raw_line
 
             while (reverse and len(lines) > 0 and 
                    ((limit_lines is not None and
@@ -172,8 +173,8 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             if ((limit_lines is None or limit_lines > shown_lines) and
                 (limit_bytes is None or limit_bytes > shown_bytes)):
                 shown_lines += 1
-                shown_bytes += len(raw_line)
-                raw_lengths.append(len(raw_line))
+                shown_bytes += len_raw_line
+                raw_lengths.append(len_raw_line)
                 lines.append((line, match))
 
         if reverse:
