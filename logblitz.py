@@ -148,10 +148,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             return "", (f"Error: {html.escape(str(e))}",)
 
         for raw_line in fp:
-            try:
-                line = raw_line.decode(charset)
-            except Exception as _:
-                line = raw_line.decode("ISO-8859-1")
+            line = raw_line.decode(charset, errors="replace")
 
             total_lines += 1
             total_bytes += len(raw_line)
