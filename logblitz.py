@@ -4,7 +4,7 @@ import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
 import lzma, collections
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
-VERSION = "4"
+VERSION = "5"
 
 class LogFiles:
     dir2files = {}
@@ -168,7 +168,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
                     (limit_bytes is not None and
                      limit_bytes <= shown_bytes))):
                 shown_lines -= 1
-                l = lines.pop(0)
+                l = lines.popleft()
                 shown_bytes -= l[2]
 
             if ((limit_lines is None or limit_lines > shown_lines) and
@@ -180,16 +180,21 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
         if reverse:
             lines.reverse()
 
+        len_max_line_number = len(str(line_number))
+
         html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
         if invert:
             for line in lines:
-                html_lines.append('<div class="sl">'
-                                  f"{html.escape(line[0])}</div>\n")
+                html_lines.append('<div class="sl"><span class="ln">'
+                                  f'{str(line[3]).rjust(len_max_line_number)}'
+                                  f"</span>{html.escape(line[0])}</div>\n")
         else:
             for line in lines:
-                line, s, e = line[0], line[1].start(), line[1].end()
+                line, s, e, line_number = line[0], line[1].start(), line[1].end(), line[3]
                 html_lines.append(
-                    f'<div class="sl">{html.escape(line[:s])}'
+                    '<div class="sl"><span class="ln">'
+                    f"{str(line_number).rjust(len_max_line_number)}</span>"
+                    f"{html.escape(line[:s])}"
                     f'<span class="sr">{html.escape(line[s:e])}</span>'
                     f"{html.escape(line[e:])}</div>\n")
 
@@ -312,6 +317,10 @@ optgroup {
 .sr {
   font-weight: bold;
   background-color: yellow;
+}
+.ln {
+  margin-right: 2em;
+  -webkit-user-select: none;
 }
 .red {
   color: red;
