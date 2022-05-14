@@ -1,7 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
-import sys, os, re, datetime, html, cgi, gzip, bz2, subprocess, configparser
-import lzma, collections
+import sys, os, re, datetime, html, cgi, gzip, bz2, configparser, lzma
+import collections
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 VERSION = "5"
@@ -29,8 +29,9 @@ def logfile_sorter(entry):
     match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
     return -1 if match is None else int(match.group(1))
 
-def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
-                    showunreadables, subdir="", indent=0):
+def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
+                    logfiles, showdotfiles, showunreadables,
+                    subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
     except Exception as _:
@@ -47,12 +48,14 @@ def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
     for entry in entries:
         relname = os.path.join(subdir, entry.name)
 
-        if entry.is_dir(follow_symlinks=False):
+        if (entry.is_dir(follow_symlinks=False) and
+            cfgdirfilter_re.search(entry.name)):
             logfiles.total_dirs += 1
             cnt = len(dir2files)
-            found_files = traverse_logdir(logdir, filefilter, logfiles,
-                                          showdotfiles, showunreadables,
-                                          relname, indent + 1)
+            found_files = traverse_logdir(logdir, cfgdirfilter_re,
+                                          cfgfilefilter_re, filefilter_re,
+                                          logfiles, showdotfiles,
+                                          showunreadables, relname, indent + 1)
             if found_files:
                 logfiles.shown_dirs += 1
                 dir2files.insert(cnt, {
@@ -63,15 +66,15 @@ def traverse_logdir(logdir, filefilter, logfiles, showdotfiles,
                 if candid_name_indent_len > logfiles.max_name_indent_len:
                     logfiles.max_name_indent_len = candid_name_indent_len
 
-        elif entry.is_file(follow_symlinks=False):
+        elif (entry.is_file(follow_symlinks=False) and
+              cfgfilefilter_re.search(entry.name)):
             stat = entry.stat(follow_symlinks=False)
             logfiles.total_files += 1
             logfiles.total_bytes += stat.st_size
 
             readable = os.access(entry.path, os.R_OK)
 
-            if ((filefilter == "" or
-                 re.search(filefilter, entry.name, re.IGNORECASE)) and
+            if (filefilter_re.search(entry.name) and
                 (showunreadables or
                  readable)):
                 found_files = True
@@ -229,6 +232,17 @@ if config.has_option(remote_user, "charset"):
 else:
     charset = "ISO-8859-1"
 
+if config.has_option(remote_user, "dirfilter"):
+    cfgdirfilter = config.get(remote_user, "dirfilter")
+else:
+    cfgdirfilter = ""
+
+if config.has_option(remote_user, "filefilter"):
+    cfgfilefilter = config.get(remote_user, "filefilter")
+else:
+    cfgfilefilter = ""
+
+query = ""
 query = ""
 reverse = False
 regex = False
@@ -262,21 +276,50 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
 
+try:
+    cfgdirfilter_re = re.compile(cfgdirfilter)
+except Exception as e:
+    cfgdirfilter_re = None
+
+try:
+    cfgfilefilter_re = re.compile(cfgfilefilter)
+except Exception as e:
+    cfgfilefilter_re = None
+
+try:
+    filefilter_re = re.compile(filefilter)
+except Exception as e:
+    filefilter_re = None
+
 logfiles = LogFiles()
 
-for logdir in logdirs:
-    logfiles.total_dirs += 1
+if cfgdirfilter_re is None:
+    html_status, html_lines = "", ("Error: Invalid dirfilter in config file:",
+                                   html.escape(cfgdirfilter),
+                                   html.escape(str(e)))
+elif cfgfilefilter_re is None:
+    html_status, html_lines = "", ("Error: Invalid filefilter in config file:",
+                                   html.escape(cfgfilefilter),
+                                   html.escape(str(e)))
+elif filefilter_re is None:
+    html_status, html_lines = "", ("Error: Invalid filefilter:",
+                                   html.escape(filefilter),
+                                   html.escape(str(e)))
+else:
+    for logdir in logdirs:
+        logfiles.total_dirs += 1
 
-    if logdir.endswith(os.path.sep):
-        logdir = logdir[:-1]
+        if logdir.endswith(os.path.sep):
+            logdir = logdir[:-1]
 
-    if traverse_logdir(logdir, re.escape(filefilter), logfiles, showdotfiles,
-                       showunreadables):
-        logfiles.shown_dirs += 1
+        if traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re,
+                           filefilter_re, logfiles, showdotfiles,
+                           showunreadables):
+            logfiles.shown_dirs += 1
 
-html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
-                                 query, reverse, ignorecase, invert, regex,
-                                 limitlines, limitmemory)
+    html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
+                                     query, reverse, ignorecase, invert, regex,
+                                     limitlines, limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>

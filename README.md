@@ -23,10 +23,16 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    [user2]
    logdirs = /var/log/mysql
    charset = UTF-8
+
+   [user3]
+   filefilter = ^samba
+   dirfilter = ^jail$|fileserver
    ```
 
-   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). ISO-8859-15 is the default charset for any logfile, but logfiles in /var/log/mysql are decoded to UTF-8. Every user can specify an alternate charset in the web interface.
-   The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql. LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
+   Any unnamed user may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). ISO-8859-15 is the default charset for any logfile, but logfiles in /var/log/mysql are decoded to UTF-8. Every user can specify an alternate charset in the web interface. If you don't provide a charset in the config file nor in the web interface, ISO-8859-1 is used by default.
+   The user *user1* may read any logfiles in /var/www/webpage1/logs and /var/www/webpage2/logs, whereas *user2* may just read logfiles from /var/log/mysql.
+   User *user3* is allowed to read logfile, which name starts with "samba", and if it resides in /var/log, /var/www/localhost/logs (as from the default section), and in any subdirectory, which name either is "jail" or contains "fileserver".
+   LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
 4. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
