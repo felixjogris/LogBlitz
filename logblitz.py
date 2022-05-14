@@ -3,8 +3,9 @@
 import sys, os, re, datetime, html, cgi, gzip, bz2, configparser, lzma
 import collections, http.cookies
 
-DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 VERSION = "5"
+COOKIE_MAX_AGE = 365*31*24*60*69
+DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
 class LogFiles:
     dir2files = {}
@@ -315,10 +316,11 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["limitlines"] = limitlines
     cookies["limitmemory"] = limitmemory
 
+is_https = os.environ.get("HTTPS", "off") == "on"
 for c in cookies.keys():
-    cookies[c]["Max-Age"] = 365*31*24*60*60
-    cookies[c]["HttpOnly"] = True
-#    cookies[c]["Secure"] = True
+    cookies[c]["Max-Age"] = COOKIE_MAX_AGE
+    cookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
+    cookies[c]["Secure"] = is_https
     cookies[c]["SameSite"] = "Strict"
 
 error, filefilter_re = re_compile_with_error(filefilter)
@@ -485,10 +487,14 @@ optgroup {
 <span class="box">
 <input type="checkbox" name="showlinenumbers" style="margin-left:10px"
  {('checked="checked"' if showlinenumbers else "")} id="showlinenumbers"
- title="Show line numbers" onchange="toggleCssClass('showlinenumbers', 'ln')">
+ title="Show line numbers"
+ onchange="showHideClass('showlinenumbers', 'ln');
+           setCookie('showlinenumbers', 'showlinenumbers');">
 <span title="Show line numbers"
  onclick="toggle('showlinenumbers');
-          toggleCssClass('showlinenumbers', 'ln');">Show line numbers</span>
+          showHideClass('showlinenumbers', 'ln');
+          setCookie('showlinenumbers',
+                    'showlinenumbers');">Show line numbers</span>
 </span>
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
@@ -569,7 +575,7 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </div>
 </form>
 """
-"""<script>
+        """<script>
 document.querySelectorAll(".bar").forEach(function (elem) {
   elem.onmousedown = function (ev) {
     var fileFilter = document.getElementById("filefilter");
@@ -606,7 +612,7 @@ function toggle (elemId)
   }
 }
 
-function toggleCssClass (elemId, className)
+function showHideClass (elemId, className)
 {
   var elem = document.getElementById(elemId);
   if (elem) {
@@ -618,6 +624,16 @@ function toggleCssClass (elemId, className)
   }
 }
 
+function setCookie (elemId, cookieName)
+{
+  var elem = document.getElementById(elemId);
+  if (elem) {
+    var show = (elem.checked ? "True" : "False");
+    document.cookie = cookieName + "=" + show + "; max-age="""
+        f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; " if is_https else ""}";"""
+        """
+  }
+}
 </script>
 </body>
 </html>""")

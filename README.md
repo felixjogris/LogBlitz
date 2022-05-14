@@ -1,7 +1,7 @@
 # LogBlitz
 
 LogBlitz is a CGI script to search through your (sys-)log files. It is written in Python 3, and aims to be a webbased alter ego of grep, zgrep, bzgrep, xzgrep, and so on. You can configure multiple directories that contain logfiles, and you can give each HTTP authenticated user an individual set of log directories.
-LogBlitz does not interpret the log entries in any way, but sees them just as a bunch of text lines. No additional modules need to be installed as a default installation of Python 3.8 or 3.9 is sufficient. The webinterface uses JavaScript just for the moveable divider between the filetree and the logview area.
+LogBlitz does not interpret the log entries in any way, but sees them just as a bunch of text lines. No additional modules need to be installed as a default installation of Python 3.8 or 3.9 is sufficient. The webinterface uses JavaScript just for the moveable divider between the filetree and the logview area, and for toggling the display of line numbers.
 
 ## Screenshot
 
