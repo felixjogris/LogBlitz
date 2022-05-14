@@ -215,6 +215,14 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
 
     return html_status, html_lines
 
+def re_compile_with_error(filter_text):
+    try:
+        filter_re = re.compile(filter_text)
+    except Exception as e:
+        return str(e), None
+
+    return None, filter_re
+
 
 configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
                           "logblitz.ini")
@@ -276,35 +284,24 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
 
-try:
-    cfgdirfilter_re = re.compile(cfgdirfilter)
-except Exception as e:
-    cfgdirfilter_re = None
-
-try:
-    cfgfilefilter_re = re.compile(cfgfilefilter)
-except Exception as e:
-    cfgfilefilter_re = None
-
-try:
-    filefilter_re = re.compile(filefilter)
-except Exception as e:
-    filefilter_re = None
+error, filefilter_re = re_compile_with_error(filefilter)
+error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
+error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 
 logfiles = LogFiles()
 
 if cfgdirfilter_re is None:
-    html_status, html_lines = "", ("Error: Invalid dirfilter in config file:",
-                                   html.escape(cfgdirfilter),
-                                   html.escape(str(e)))
+    html_status, html_lines = "", ("Error: Invalid dirfilter in config file: ",
+                                   html.escape(cfgdirfilter), ": ",
+                                   html.escape(str(error)))
 elif cfgfilefilter_re is None:
-    html_status, html_lines = "", ("Error: Invalid filefilter in config file:",
-                                   html.escape(cfgfilefilter),
-                                   html.escape(str(e)))
+    html_status, html_lines = "", ("Error: Invalid filefilter in config file: ",
+                                   html.escape(cfgfilefilter), ": ",
+                                   html.escape(str(error)))
 elif filefilter_re is None:
-    html_status, html_lines = "", ("Error: Invalid filefilter:",
-                                   html.escape(filefilter),
-                                   html.escape(str(e)))
+    html_status, html_lines = "", ("Error: Invalid filefilter: ",
+                                   html.escape(filefilter), ": ",
+                                   html.escape(str(error)))
 else:
     for logdir in logdirs:
         logfiles.total_dirs += 1
