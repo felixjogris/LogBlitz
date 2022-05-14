@@ -1,7 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
 import sys, os, re, datetime, html, cgi, gzip, bz2, configparser, lzma
-import collections
+import collections, http.cookies
 
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 VERSION = "5"
@@ -38,7 +38,8 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
         return False
 
     if not showdotfiles:
-        entries = filter(lambda entry: not entry.name.startswith("."), entries)
+        entries = filter(lambda entry: not entry.name.startswith("."),
+                         entries)
     entries = sorted(entries, key=logfile_sorter)
     entries = sorted(entries, key=lambda entry: entry.name)
 
@@ -55,7 +56,8 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
             found_files = traverse_logdir(logdir, cfgdirfilter_re,
                                           cfgfilefilter_re, filefilter_re,
                                           logfiles, showdotfiles,
-                                          showunreadables, relname, indent + 1)
+                                          showunreadables, relname,
+                                          indent + 1)
             if found_files:
                 logfiles.shown_dirs += 1
                 dir2files.insert(cnt, {
@@ -193,7 +195,8 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
                                   f"</span>{html.escape(line[0])}</div>\n")
         else:
             for line in lines:
-                line, s, e, line_number = line[0], line[1].start(), line[1].end(), line[3]
+                line, s, e, line_number = (line[0], line[1].start(),
+                                           line[1].end(), line[3])
                 html_lines.append(
                     '<div class="sl"><span class="ln">'
                     f"{str(line_number).rjust(len_max_line_number)}</span>"
@@ -250,19 +253,33 @@ if config.has_option(remote_user, "filefilter"):
 else:
     cfgfilefilter = ""
 
-query = ""
-query = ""
-reverse = False
-regex = False
-showlinenumbers = True
-ignorecase = False
-invert = False
-filefilter = ""
 fileselect = []
-limitlines = "1000"
-limitmemory = "1"
-showdotfiles = False
-showunreadables = False
+
+cookies = http.cookies.SimpleCookie()
+try:
+    cookies.load(os.environ.get("HTTP_COOKIE", ""))
+except Exception as _:
+    pass
+
+query = cookies["query"].value if "query" in cookies else ""
+reverse = "reverse" in cookies and cookies["reverse"].value == "True"
+ignorecase = "ignorecase" in cookies and cookies["ignorecase"].value == "True"
+invert = "invert" in cookies and cookies["invert"].value == "True"
+regex = "regex" in cookies and cookies["regex"].value == "True"
+showlinenumbers = ("showlinenumbers" in cookies and
+                   cookies["showlinenumbers"].value == "True")
+showdotfiles = ("showdotfiles" in cookies and
+                cookies["showdotfiles"].value == "True")
+showunreadables = ("showunreadables" in cookies and
+                   cookies["showunreadables"].value == "True")
+charset = cookies["charset"].value if "charset" in cookies else charset
+filefilter = cookies["filefilter"].value if "filefilter" in cookies else ""
+tmp = cookies["limitlines"].value if "limitlines" in cookies else "1000"
+if tmp == "" or tmp.isnumeric():
+    limitlines = tmp
+tmp = cookies["limitmemory"].value if "limitmemory" in cookies else "1"
+if tmp == "" or tmp.isnumeric():
+    limitmemory = tmp
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -284,6 +301,26 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
 
+    cookies.clear()
+    cookies["query"] = query
+    cookies["reverse"] = reverse
+    cookies["ignorecase"] = ignorecase
+    cookies["invert"] = invert
+    cookies["regex"] = regex
+    cookies["showlinenumbers"] = showlinenumbers
+    cookies["showdotfiles"] = showdotfiles
+    cookies["showunreadables"] = showunreadables
+    cookies["charset"] = charset
+    cookies["filefilter"] = filefilter
+    cookies["limitlines"] = limitlines
+    cookies["limitmemory"] = limitmemory
+
+for c in cookies.keys():
+    cookies[c]["Max-Age"] = 365*31*24*60*60
+    cookies[c]["HttpOnly"] = True
+#    cookies[c]["Secure"] = True
+    cookies[c]["SameSite"] = "Strict"
+
 error, filefilter_re = re_compile_with_error(filefilter)
 error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
 error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
@@ -291,11 +328,11 @@ error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 logfiles = LogFiles()
 
 if cfgdirfilter_re is None:
-    html_status, html_lines = "", ("Error: Invalid dirfilter in config file: ",
+    html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
                                    html.escape(cfgdirfilter), ": ",
                                    html.escape(str(error)))
 elif cfgfilefilter_re is None:
-    html_status, html_lines = "", ("Error: Invalid filefilter in config file: ",
+    html_status, html_lines = "", ("Error: Invalid filefilter in INI file: ",
                                    html.escape(cfgfilefilter), ": ",
                                    html.escape(str(error)))
 elif filefilter_re is None:
@@ -315,8 +352,8 @@ else:
             logfiles.shown_dirs += 1
 
     html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
-                                     query, reverse, ignorecase, invert, regex,
-                                     limitlines, limitmemory)
+                                     query, reverse, ignorecase, invert,
+                                     regex, limitlines, limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>
@@ -420,7 +457,8 @@ optgroup {
 <input type="checkbox" name="reverse" style="margin-left:10px"
  {('checked="checked"' if reverse else "")} id="reverse"
  title="Display latest log entries first">
-<span title="Display latest log entries first" onclick="toggle('reverse')">Reverse</span>
+<span title="Display latest log entries first"
+ onclick="toggle('reverse')">Reverse</span>
 </span>
 <span class="box">
 <input type="checkbox" name="ignorecase" style="margin-left:10px"
@@ -584,6 +622,9 @@ function toggleCssClass (elemId, className)
 </body>
 </html>""")
 
-print("Content-Type: text/html; charset=utf-8\n"
-      f'Content-Length: {len(result.encode("utf-8"))}\n')
+print("Content-Type: text/html; charset=utf-8\r\n"
+      f'Content-Length: {len(result.encode("utf-8"))}')
+if cookies:
+    print(cookies)
+print()
 print(result, end="")
