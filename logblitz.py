@@ -3,7 +3,7 @@
 import sys, os, re, datetime, html, cgi, gzip, bz2, configparser, lzma
 import collections, http.cookies
 
-VERSION = "5"
+VERSION = "6"
 COOKIE_MAX_AGE = 365*31*24*60*69
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -161,8 +161,9 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             total_lines += 1
             total_bytes += len_raw_line
 
-            match = query_re.search(line)
-            if (invert and match) or (not invert and not match):
+            matches = [(m.start(), m.end()) for m in query_re.finditer(line)]
+            if ((invert and len(matches) > 0) or
+                (not invert and len(matches) <= 0)):
                 continue
 
             matching_lines += 1
@@ -181,7 +182,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
                 (limit_bytes is None or limit_bytes > shown_bytes)):
                 shown_lines += 1
                 shown_bytes += len_raw_line
-                lines.append((line, match, len_raw_line, line_number))
+                lines.append((line, matches, len_raw_line, line_number))
 
         if reverse:
             lines.reverse()
@@ -196,14 +197,18 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
                                   f"</span>{html.escape(line[0])}</div>\n")
         else:
             for line in lines:
-                line, s, e, line_number = (line[0], line[1].start(),
-                                           line[1].end(), line[3])
-                html_lines.append(
+                line, matches, line_number = line[0], line[1], line[3]
+                html_line = [(
                     '<div class="sl"><span class="ln">'
-                    f"{str(line_number).rjust(len_max_line_number)}</span>"
-                    f"{html.escape(line[:s])}"
-                    f'<span class="sr">{html.escape(line[s:e])}</span>'
-                    f"{html.escape(line[e:])}</div>\n")
+                    f"{str(line_number).rjust(len_max_line_number)}</span>")]
+                oldend = 0
+                for m in matches:
+                    html_line.append((
+                        f'{html.escape(line[oldend:m[0]])}<span class="sr">'
+                        f"{html.escape(line[m[0]:m[1]])}</span>"))
+                    oldend = m[1]
+                html_line.append(f"{html.escape(line[oldend:])}</div>\n")
+                html_lines.append("".join(html_line))
 
     html_status = ("<span"
         f"""{' class="red"' if not limit_lines is None and
@@ -284,7 +289,7 @@ if tmp == "" or tmp.isnumeric():
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
-    query = form.getvalue("query", query)
+    query = form.getvalue("query", "")
     reverse = "reverse" in form
     ignorecase = "ignorecase" in form
     invert = "invert" in form
@@ -292,13 +297,13 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     showlinenumbers = "showlinenumbers" in form
     showdotfiles = "showdotfiles" in form
     showunreadables = "showunreadables" in form
-    charset = form.getvalue("charset", charset)
+    charset = form.getvalue("charset", "")
     filefilter = form.getvalue("filefilter", "")
     fileselect = form.getlist("fileselect")
-    tmp = form.getvalue("limitlines", "")
+    tmp = form.getvalue("limitlines", "1000")
     if tmp == "" or tmp.isnumeric():
         limitlines = tmp
-    tmp = form.getvalue("limitmemory", "")
+    tmp = form.getvalue("limitmemory", "1")
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
 
