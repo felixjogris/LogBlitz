@@ -121,8 +121,11 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     after = 0 if after == "" else int(after)
 
     try:
-        query_re = re.compile(query if regex else re.escape(query),
-                              re.IGNORECASE if ignorecase else 0)
+        if query is None or query == "":
+            query_re = re.compile("^", 0)
+        else:
+            query_re = re.compile(query if regex else re.escape(query),
+                                  re.IGNORECASE if ignorecase else 0)
     except Exception as e:
         return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
 
