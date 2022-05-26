@@ -104,8 +104,8 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
 
     return found_files
 
-def search(charset, logdirs, logfiles, fileselect, query, reverse,
-           ignorecase, invert, regex, limitlines, limitmemory):
+def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
+           invert, regex, before, after, limitlines, limitmemory):
     html_lines = []
     shown_lines = 0
     shown_bytes = 0
@@ -117,6 +117,8 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
 
     limit_lines = None if limitlines == "" else int(limitlines)
     limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
+    before = 0 if before == "" else int(before)
+    after = 0 if after == "" else int(after)
 
     try:
         query_re = re.compile(query if regex else re.escape(query),
@@ -137,9 +139,6 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             lambda logdir: logdir in logfiles.dir2files, logdirs)
          for logfile in logfiles.dir2files[logdir]]):
 
-        num_logfiles += 1
-        lines = collections.deque()
-
         try:
             if logfile["path"].lower().endswith(".gz"):
                 fp = gzip.open(logfile["path"], "rb")
@@ -152,7 +151,12 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
+        num_logfiles += 1
+        b4buf = collections.deque()
+        lines = collections.deque()
         line_number = 0
+        num_after = after
+
         for raw_line in fp:
             line_number += 1
             len_raw_line = len(raw_line)
@@ -164,6 +168,12 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
             matches = [(m.start(), m.end()) for m in query_re.finditer(line)]
             if ((invert and len(matches) > 0) or
                 (not invert and len(matches) <= 0)):
+                b4buf.append((line, [], len_raw_line, line_number))
+                while len(b4buf) > before:
+                    b4buf.popleft()
+                if num_after < after:
+                    lines.append((line, [], len_raw_line, line_number))
+                num_after += 1
                 continue
 
             matching_lines += 1
@@ -180,6 +190,12 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse,
 
             if ((limit_lines is None or limit_lines > shown_lines) and
                 (limit_bytes is None or limit_bytes > shown_bytes)):
+                for l in b4buf:
+                    shown_lines += 1
+                    shown_bytes += l[2]
+                    lines.append(l)
+                b4buf.clear()
+                num_after = 0
                 shown_lines += 1
                 shown_bytes += len_raw_line
                 lines.append((line, matches, len_raw_line, line_number))
@@ -286,6 +302,12 @@ if tmp == "" or tmp.isnumeric():
 tmp = cookies["limitmemory"].value if "limitmemory" in cookies else "1"
 if tmp == "" or tmp.isnumeric():
     limitmemory = tmp
+tmp = cookies["before"].value if "before" in cookies else "0"
+if tmp == "" or tmp.isnumeric():
+    before = tmp
+tmp = cookies["after"].value if "after" in cookies else "0"
+if tmp == "" or tmp.isnumeric():
+    after = tmp
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -306,6 +328,12 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     tmp = form.getvalue("limitmemory", "1")
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
+    tmp = form.getvalue("before", "0")
+    if tmp == "" or tmp.isnumeric():
+        before = tmp
+    tmp = form.getvalue("after", "0")
+    if tmp == "" or tmp.isnumeric():
+        after = tmp
 
     cookies.clear()
     cookies["query"] = query
@@ -313,6 +341,8 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["ignorecase"] = ignorecase
     cookies["invert"] = invert
     cookies["regex"] = regex
+    cookies["before"] = before
+    cookies["after"] = after
     cookies["showlinenumbers"] = showlinenumbers
     cookies["showdotfiles"] = showdotfiles
     cookies["showunreadables"] = showunreadables
@@ -360,7 +390,8 @@ else:
 
     html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
                                      query, reverse, ignorecase, invert,
-                                     regex, limitlines, limitmemory)
+                                     regex, before, after, limitlines,
+                                     limitmemory)
 
 result = ("""<!DOCTYPE html>
 <html>
@@ -502,6 +533,16 @@ optgroup {
                     'showlinenumbers');">Show line numbers</span>
 </span>
 <span class="box">
+<span title="Show this # of lines before each matching line" style="margin-left:10px">Before:</span>
+<input type="text" name="before" value="{html.escape(before)}"
+ title="Show this # of lines before each matching line" style="width:1em">
+</span>
+<span class="box">
+<span title="Show this # of lines after each matching line" style="margin-left:10px">After:</span>
+<input type="text" name="after" value="{html.escape(after)}"
+ title="Show this # of lines after each matching line" style="width:1em">
+</span>
+<span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
 <input type="text" name="charset" value="{html.escape(charset)}"
  title="Charset of logfiles" style="width:7em">
@@ -515,7 +556,7 @@ optgroup {
 <span class="box">
 <input type="text" name="limitmemory" value="{html.escape(limitmemory)}"
  title="Limit search results to this amount of memory"
- style="margin-left:10px; text-align:right; width:4em">
+ style="margin-left:10px; text-align:right; width:3em">
 <span title="Limit search results to this amount of memory">MiB memory
  limit</span>
 <span style="float:right; font-size:small">
