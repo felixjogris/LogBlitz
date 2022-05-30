@@ -32,9 +32,13 @@ def bytes_pretty(filesize):
             break
     return f"{filesize:.2f}{suffix}"
 
-def logfile_sorter(entry):
-    m = re.search("(?i:\.(\d+)(\.(bz2|gz|xz))?$)", entry.name)
+def logfile_number_sorter(entry):
+    m = re.search("(?i:\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
     return -1 if m is None else int(m.group(1))
+
+def logfile_prefix_sorter(entry):
+    m = re.match("(?i:(.*)\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
+    return entry.name if m is None else m.group(1)
 
 def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                     logfiles, showdotfiles, showunreadables,
@@ -47,8 +51,8 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
     if not showdotfiles:
         entries = filter(lambda entry: not entry.name.startswith("."),
                          entries)
-    entries = sorted(entries, key=logfile_sorter)
-    entries = sorted(entries, key=lambda entry: entry.name)
+    entries = sorted(entries, key=logfile_number_sorter)
+    entries = sorted(entries, key=logfile_prefix_sorter)
 
     dir2files = logfiles.dir2files.setdefault(logdir, [])
     found_files = False
