@@ -180,7 +180,16 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             total_lines += 1
             total_bytes += len_raw_line
 
-            matches = [(m.start(), m.end()) for m in query_re.finditer(line)]
+            matches = []
+            pos = 0
+            while True:
+                m = query_re.search(line, pos)
+                if m:
+                    pos = m.end(0)
+                    matches.append((m.start(), m.end()),)
+                else:
+                    break
+
             if ((invert and len(matches) > 0) or
                 (not invert and len(matches) <= 0)):
                 if num_after < after:
