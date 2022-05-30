@@ -1,9 +1,15 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
-import sys, os, re, datetime, html, cgi, gzip, bz2, configparser, lzma
+import sys, os, datetime, html, cgi, gzip, bz2, configparser, lzma
 import collections, http.cookies
+try:
+    import re2 as re
+    RE_MODULE = "re2"
+except Exception as _:
+    import re
+    RE_MODULE = "re"
 
-VERSION = "6"
+VERSION = "7"
 COOKIE_MAX_AGE = 365*31*24*60*69
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -27,8 +33,8 @@ def bytes_pretty(filesize):
     return f"{filesize:.2f}{suffix}"
 
 def logfile_sorter(entry):
-    match = re.search("\.(\d+)(\.(bz2|gz|xz))?$", entry.name, re.IGNORECASE)
-    return -1 if match is None else int(match.group(1))
+    m = re.search("(?i:\.(\d+)(\.(bz2|gz|xz))?$)", entry.name)
+    return -1 if m is None else int(m.group(1))
 
 def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                     logfiles, showdotfiles, showunreadables,
@@ -123,9 +129,11 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     try:
         if query is None or query == "":
             query_re = re.compile("^", 0)
+        elif ignorecase:
+            query_re = re.compile(
+                f"(?i:{query if regex else re.escape(query)})")
         else:
-            query_re = re.compile(query if regex else re.escape(query),
-                                  re.IGNORECASE if ignorecase else 0)
+            query_re = re.compile(f"{query if regex else re.escape(query)}")
     except Exception as e:
         return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
 
@@ -617,6 +625,9 @@ result += (f"""</select>
 <div class="sbb">
 {html_status}
 <span style="float:right">
+<span style="margin-right:10px">
+Regex module: {RE_MODULE}
+</span>
 Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </span>
 </div>
