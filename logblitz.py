@@ -183,12 +183,13 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             matches = [(m.start(), m.end()) for m in query_re.finditer(line)]
             if ((invert and len(matches) > 0) or
                 (not invert and len(matches) <= 0)):
-                b4buf.append((line, [], len_raw_line, line_number))
-                while len(b4buf) > before:
-                    b4buf.popleft()
                 if num_after < after:
                     lines.append((line, [], len_raw_line, line_number))
-                num_after += 1
+                    num_after += 1
+                else:
+                    b4buf.append((line, [], len_raw_line, line_number))
+                    while len(b4buf) > before:
+                        b4buf.popleft()
                 continue
 
             matching_lines += 1
@@ -213,7 +214,8 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
                 num_after = 0
                 shown_lines += 1
                 shown_bytes += len_raw_line
-                lines.append((line, matches, len_raw_line, line_number))
+                lines.append((line, ((0, len(line)),) if invert else matches,
+                              len_raw_line, line_number))
 
         if reverse:
             lines.reverse()
@@ -221,25 +223,19 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
         len_max_line_number = len(str(line_number))
 
         html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
-        if invert:
-            for line in lines:
-                html_lines.append('<div class="sl"><span class="ln">'
-                                  f'{str(line[3]).rjust(len_max_line_number)}'
-                                  f"</span>{html.escape(line[0])}</div>\n")
-        else:
-            for line in lines:
-                line, matches, line_number = line[0], line[1], line[3]
-                html_line = [(
-                    '<div class="sl"><span class="ln">'
-                    f"{str(line_number).rjust(len_max_line_number)}</span>")]
-                oldend = 0
-                for m in matches:
-                    html_line.append((
-                        f'{html.escape(line[oldend:m[0]])}<span class="sr">'
-                        f"{html.escape(line[m[0]:m[1]])}</span>"))
-                    oldend = m[1]
-                html_line.append(f"{html.escape(line[oldend:])}</div>\n")
-                html_lines.append("".join(html_line))
+        for line in lines:
+            line, matches, line_number = line[0], line[1], line[3]
+            html_line = [(
+                '<div class="sl"><span class="ln">'
+                f"{str(line_number).rjust(len_max_line_number)}</span>")]
+            oldend = 0
+            for m in matches:
+                html_line.append((
+                    f'{html.escape(line[oldend:m[0]])}<span class="sr">'
+                    f"{html.escape(line[m[0]:m[1]])}</span>"))
+                oldend = m[1]
+            html_line.append(f"{html.escape(line[oldend:])}</div>\n")
+            html_lines.append("".join(html_line))
 
     html_status = ("<span"
         f"""{' class="red"' if not limit_lines is None and
