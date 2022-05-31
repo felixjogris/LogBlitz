@@ -125,10 +125,17 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     total_bytes = 0
     num_logfiles = 0
 
-    limit_lines = None if limitlines == "" else int(limitlines)
-    limit_bytes = None if limitmemory == "" else int(limitmemory) * 1024**2
+    limit_lines = sys.maxsize if limitlines == "" else int(limitlines)
+    limit_bytes = (sys.maxsize if limitmemory == ""
+                   else int(limitmemory) * 1024**2)
     before = 0 if before == "" else int(before)
     after = 0 if after == "" else int(after)
+
+    if invert:
+        eval_matches = (lambda matches, line:
+                        (len(matches) <= 0, ((0, len(line)),)))
+    else:
+        eval_matches = lambda matches, line: (len(matches) > 0, matches)
 
     try:
         if query is None or query == "":
@@ -148,11 +155,11 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     # or not, respectively
     # the inner filter() emits only those logdirs that contain logfiles
     # the outer filter() emits only those logfiles that the user asked for
-    for logfile in filter(
+    for num_logfiles, logfile in enumerate(filter(
         lambda logfile: "path" in logfile and logfile["path"] in fileselect,
         [logfile for logdir in filter(
             lambda logdir: logdir in logfiles.dir2files, logdirs)
-         for logfile in logfiles.dir2files[logdir]]):
+         for logfile in logfiles.dir2files[logdir]]), 1):
 
         try:
             if logfile["path"].lower().endswith(".gz"):
@@ -166,32 +173,25 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
         except Exception as e:
             return "", (f"Error: {html.escape(str(e))}",)
 
-        num_logfiles += 1
         b4buf = collections.deque()
         lines = collections.deque()
-        line_number = 0
         num_after = after
+        line_number = 0
 
-        for raw_line in fp:
-            line_number += 1
+        for line_number, raw_line in enumerate(fp, 1):
             len_raw_line = len(raw_line)
             line = raw_line.decode(charset, errors="replace")
 
-            total_lines += 1
             total_bytes += len_raw_line
 
             matches = []
-            pos = 0
-            while True:
-                m = query_re.search(line, pos)
-                if m:
-                    pos = m.end(0)
-                    matches.append((m.start(), m.end()),)
-                else:
-                    break
+            matchee = query_re.search(line, 0)
+            while matchee:
+                matches.append((matchee.start(), matchee.end()))
+                matchee = query_re.search(line, matchee.end())
+            found, matches = eval_matches(matches, line)
 
-            if ((invert and len(matches) > 0) or
-                (not invert and len(matches) <= 0)):
+            if not found:
                 if num_after < after:
                     lines.append((line, [], len_raw_line, line_number))
                     num_after += 1
@@ -205,16 +205,14 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             matching_bytes += len_raw_line
 
             while (reverse and len(lines) > 0 and 
-                   ((limit_lines is not None and
-                     limit_lines <= shown_lines) or
-                    (limit_bytes is not None and
-                     limit_bytes <= shown_bytes))):
+                   (limit_lines <= shown_lines or
+                    limit_bytes <= shown_bytes)):
                 shown_lines -= 1
                 l = lines.popleft()
                 shown_bytes -= l[2]
 
-            if ((limit_lines is None or limit_lines > shown_lines) and
-                (limit_bytes is None or limit_bytes > shown_bytes)):
+            if (limit_lines > shown_lines and
+                limit_bytes > shown_bytes):
                 for l in b4buf:
                     shown_lines += 1
                     shown_bytes += l[2]
@@ -223,12 +221,12 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
                 num_after = 0
                 shown_lines += 1
                 shown_bytes += len_raw_line
-                lines.append((line, ((0, len(line)),) if invert else matches,
-                              len_raw_line, line_number))
+                lines.append((line, matches, len_raw_line, line_number))
 
         if reverse:
             lines.reverse()
 
+        total_lines += line_number
         len_max_line_number = len(str(line_number))
 
         html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
@@ -553,12 +551,14 @@ optgroup {
                     'showlinenumbers');">Show line numbers</span>
 </span>
 <span class="box">
-<span title="Show this # of lines before each matching line" style="margin-left:10px">Before:</span>
+<span title="Show this # of lines before each matching line"
+ style="margin-left:10px">Before:</span>
 <input type="text" name="before" value="{html.escape(before)}"
  title="Show this # of lines before each matching line" style="width:1em">
 </span>
 <span class="box">
-<span title="Show this # of lines after each matching line" style="margin-left:10px">After:</span>
+<span title="Show this # of lines after each matching line"
+ style="margin-left:10px">After:</span>
 <input type="text" name="after" value="{html.escape(after)}"
  title="Show this # of lines after each matching line" style="width:1em">
 </span>
