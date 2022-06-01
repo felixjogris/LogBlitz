@@ -10,7 +10,7 @@ except Exception as _:
     RE_MODULE = "re"
 
 VERSION = "7"
-COOKIE_MAX_AGE = 365*31*24*60*69
+COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
 class LogFiles:
