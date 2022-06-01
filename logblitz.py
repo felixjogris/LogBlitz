@@ -186,8 +186,9 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             matches = []
             matchee = query_re.search(line, 0)
             while matchee:
-                matches.append((matchee.start(), matchee.end()))
-                matchee = query_re.search(line, matchee.end())
+                matches.append(matchee.span())
+                matchee = query_re.search(line, matchee.end() +
+                                          int(matchee.end() == matchee.start()))
             found, matches = eval_matches(matches, line)
 
             if not found:
