@@ -337,16 +337,16 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     charset = form.getvalue("charset", "")
     filefilter = form.getvalue("filefilter", "")
     fileselect = form.getlist("fileselect")
-    tmp = form.getvalue("limitlines", "1000")
+    tmp = form.getvalue("limitlines", "")
     if tmp == "" or tmp.isnumeric():
         limitlines = tmp
-    tmp = form.getvalue("limitmemory", "1")
+    tmp = form.getvalue("limitmemory", "")
     if tmp == "" or tmp.isnumeric():
         limitmemory = tmp
-    tmp = form.getvalue("before", "0")
+    tmp = form.getvalue("before", "")
     if tmp == "" or tmp.isnumeric():
         before = tmp
-    tmp = form.getvalue("after", "0")
+    tmp = form.getvalue("after", "")
     if tmp == "" or tmp.isnumeric():
         after = tmp
 
