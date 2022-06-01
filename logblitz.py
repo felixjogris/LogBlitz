@@ -371,7 +371,6 @@ for c in cookies.keys():
     cookies[c]["Max-Age"] = COOKIE_MAX_AGE
     cookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
     cookies[c]["Secure"] = is_https
-    cookies[c]["SameSite"] = "Strict"
 
 error, filefilter_re = re_compile_with_error(filefilter)
 error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
