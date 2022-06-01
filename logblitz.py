@@ -34,11 +34,11 @@ def bytes_pretty(filesize):
 
 def logfile_number_sorter(entry):
     m = re.search("(?i:\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
-    return -1 if m is None else int(m.group(1))
+    return int(m.group(1)) if m else -1
 
 def logfile_prefix_sorter(entry):
     m = re.match("(?i:(.*)\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
-    return entry.name if m is None else m.group(1)
+    return m.group(1) if m else entry.name
 
 def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                     logfiles, showdotfiles, showunreadables,
@@ -125,11 +125,10 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     total_bytes = 0
     num_logfiles = 0
 
-    limit_lines = sys.maxsize if limitlines == "" else int(limitlines)
-    limit_bytes = (sys.maxsize if limitmemory == ""
-                   else int(limitmemory) * 1024**2)
-    before = 0 if before == "" else int(before)
-    after = 0 if after == "" else int(after)
+    limit_lines = int(limitlines) if limitlines else sys.maxsize
+    limit_bytes = int(limitmemory) * 1024**2 if limitmemory else sys.maxsize
+    before = int(before) if before else 0
+    after = int(after) if after else 0
 
     if invert:
         eval_matches = (lambda matches, line:
@@ -138,8 +137,8 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
         eval_matches = lambda matches, line: (len(matches) > 0, matches)
 
     try:
-        if query is None or query == "":
-            query_re = re.compile("^", 0)
+        if not query:
+            query_re = re.compile("^")
         elif ignorecase:
             query_re = re.compile(
                 f"(?i:{query if regex else re.escape(query)})")
@@ -245,11 +244,9 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             html_lines.append("".join(html_line))
 
     html_status = ("<span"
-        f"""{' class="red"' if not limit_lines is None and
-                               shown_lines >= limit_lines else ""}>"""
+        f"""{' class="red"' if shown_lines >= limit_lines else ""}>"""
         f"{shown_lines}</span> (<span"
-        f"""{' class="red"' if not limit_bytes is None and
-                               shown_bytes >= limit_bytes else ""}>"""
+        f"""{' class="red"' if shown_bytes >= limit_bytes else ""}>"""
         f"{bytes_pretty(shown_bytes)}</span>) lines shown, "
         f"{matching_lines} ({bytes_pretty(matching_bytes)}) matching, "
         f"{total_lines} ({bytes_pretty(total_bytes)}) total lines in "
@@ -382,15 +379,15 @@ error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 
 logfiles = LogFiles()
 
-if cfgdirfilter_re is None:
+if not cfgdirfilter_re:
     html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
                                    html.escape(cfgdirfilter), ": ",
                                    html.escape(str(error)))
-elif cfgfilefilter_re is None:
+elif not cfgfilefilter_re:
     html_status, html_lines = "", ("Error: Invalid filefilter in INI file: ",
                                    html.escape(cfgfilefilter), ": ",
                                    html.escape(str(error)))
-elif filefilter_re is None:
+elif not filefilter_re:
     html_status, html_lines = "", ("Error: Invalid filefilter: ",
                                    html.escape(filefilter), ": ",
                                    html.escape(str(error)))
