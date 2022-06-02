@@ -10,7 +10,10 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
 ## Installation
 1. Put logblitz.py to the cgi-bin/ directory on you webserver, and make it executable
 2. Optionally, place favicon.ico to the htdocs/ directory
-3. Create etc/logblitz.ini, e.g.:
+3. Highly recommended: Install https://github.com/facebook/pyre2/:
+   * On FreeBSD: make -C /usr/ports/devel/py-google-re2 install clean
+   * On Gentoo Linux: emerge pyre2
+4. Create etc/logblitz.ini, e.g.:
 
    ```
    [DEFAULT]
@@ -34,7 +37,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    User *user3* is allowed to read logfile, which name starts with "samba", and if it resides in /var/log, /var/www/localhost/logs (as from the default section), and in any subdirectory, which name either is "jail" or contains "fileserver".
    LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
-4. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
+5. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
 ## Homepage
 
