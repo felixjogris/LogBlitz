@@ -19,6 +19,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    [DEFAULT]
    logdirs = /var/log:/var/www/localhost/logs
    charset = ISO-8859-15
+   logout_url = https://my.server.test/cgi-bin/logout.py
 
    [user1]
    logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
