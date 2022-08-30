@@ -1,7 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
 import sys, os, datetime, html, cgi, gzip, bz2, configparser, lzma
-import collections, http.cookies
+import collections, http.cookies, codecs
 try:
     import re2 as re
     RE_MODULE = "re2"
@@ -9,7 +9,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "7"
+VERSION = "8"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -279,7 +279,7 @@ else:
 if config.has_option(remote_user, "charset"):
     charset = config.get(remote_user, "charset")
 else:
-    charset = "ISO-8859-1"
+    charset = ""
 
 if config.has_option(remote_user, "dirfilter"):
     cfgdirfilter = config.get(remote_user, "dirfilter")
@@ -290,6 +290,11 @@ if config.has_option(remote_user, "filefilter"):
     cfgfilefilter = config.get(remote_user, "filefilter")
 else:
     cfgfilefilter = ""
+
+if config.has_option(remote_user, "logout_url"):
+    logout_url = config.get(remote_user, "logout_url")
+else:
+    logout_url = ""
 
 fileselect = []
 
@@ -366,6 +371,11 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["filefilter"] = filefilter
     cookies["limitlines"] = limitlines
     cookies["limitmemory"] = limitmemory
+
+try:
+    codecs.lookup(charset)
+except LookupError as _:
+    charset = "ISO-8859-1"
 
 is_https = os.environ.get("HTTPS", "off") == "on"
 for c in cookies.keys():
@@ -575,12 +585,14 @@ optgroup {
  title="Limit search results to this amount of memory"
  style="margin-left:10px; text-align:right; width:3em">
 <span title="Limit search results to this amount of memory">MiB memory
- limit</span>
-<span style="float:right; font-size:small">
-<a href="https://ogris.de/logblitz/"
- target="_blank">About LogBlitz {VERSION}...</a>
-</span>
-</span>
+ limit</span>""")
+
+if logout_url:
+    result += (f"""<span style="float:right; margin-right:5px">
+<a href="{logout_url}">Logout</a>
+</span>""")
+
+result += ("""</span>
 </div>
 
 <div id="fileselect">
@@ -634,7 +646,13 @@ result += (f"""</select>
 <span style="margin-right:10px">
 Regex module: {RE_MODULE}
 </span>
+<span style="margin-right:10px">
 Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
+</span>
+<span style="margin-right:5px">
+<a href="https://ogris.de/logblitz/"
+ target="_blank">About LogBlitz {VERSION}...</a>
+</span>
 </span>
 </div>
 
