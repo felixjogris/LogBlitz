@@ -1,5 +1,8 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
+import time
+start_time = time.perf_counter()
+
 import sys, os, datetime, html, cgi, gzip, bz2, configparser, lzma
 import collections, http.cookies, codecs
 try:
@@ -9,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "8"
+VERSION = "9"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -270,29 +273,31 @@ configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
 config = configparser.ConfigParser()
 config.read(configfile)
 
-remote_user = os.environ.get("REMOTE_USER", "DEFAULT")
-if config.has_option(remote_user, "logdirs"):
-    logdirs = config.get(remote_user, "logdirs").split(os.path.pathsep)
+remote_user = os.environ.get("REMOTE_USER")
+config_section = remote_user if remote_user else "DEFAULT"
+
+if config.has_option(config_section, "logdirs"):
+    logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
 else:
     logdirs = []
 
-if config.has_option(remote_user, "charset"):
-    charset = config.get(remote_user, "charset")
+if config.has_option(config_section, "charset"):
+    charset = config.get(config_section, "charset")
 else:
     charset = ""
 
-if config.has_option(remote_user, "dirfilter"):
-    cfgdirfilter = config.get(remote_user, "dirfilter")
+if config.has_option(config_section, "dirfilter"):
+    cfgdirfilter = config.get(config_section, "dirfilter")
 else:
     cfgdirfilter = ""
 
-if config.has_option(remote_user, "filefilter"):
-    cfgfilefilter = config.get(remote_user, "filefilter")
+if config.has_option(config_section, "filefilter"):
+    cfgfilefilter = config.get(config_section, "filefilter")
 else:
     cfgfilefilter = ""
 
-if config.has_option(remote_user, "logout_url"):
-    logout_url = config.get(remote_user, "logout_url")
+if config.has_option(config_section, "logout_url"):
+    logout_url = config.get(config_section, "logout_url")
 else:
     logout_url = ""
 
@@ -589,8 +594,9 @@ optgroup {
 
 if logout_url:
     result += (f"""<span style="float:right; margin-right:5px">
-<a href="{logout_url}">Logout</a>
-</span>""")
+<a href="{logout_url}" title="Logout{
+html.escape(" user %s" % (remote_user,)) if remote_user else ""
+}">Logout</a></span>""")
 
 result += ("""</span>
 </div>
@@ -643,6 +649,9 @@ result += (f"""</select>
 <div class="sbb">
 {html_status}
 <span style="float:right">
+<span style="margin-right:10px">
+Run time: {"%.1fs" % (time.perf_counter() - start_time,)}
+</span>
 <span style="margin-right:10px">
 Regex module: {RE_MODULE}
 </span>
