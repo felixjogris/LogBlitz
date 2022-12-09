@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "9"
+VERSION = "10"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -139,16 +139,33 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     else:
         eval_matches = lambda matches, line: (len(matches) > 0, matches)
 
-    try:
-        if not query:
-            query_re = re.compile("^")
-        elif ignorecase:
-            query_re = re.compile(
-                f"(?i:{query if regex else re.escape(query)})")
-        else:
-            query_re = re.compile(f"{query if regex else re.escape(query)}")
-    except Exception as e:
-        return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
+    if regex and query:
+        try:
+            query_re = (re.compile(f"(?i:{query})") if ignorecase else
+                        re.compile(query))
+        except Exception as e:
+            return "", (f"Error: Invalid regex: {html.escape(str(e))}",)
+
+        def matcher(line):
+            matchee = query_re.search(line, 0)
+            while matchee:
+                yield matchee.span()
+                matchee = query_re.search(line, matchee.end() +
+                                          int(matchee.end() == matchee.start()))
+    elif query:
+        fold_string = str.lower if ignorecase else str
+        query_folded = fold_string(query)
+
+        def matcher(line):
+            line_folded = fold_string(line)
+            start = line_folded.find(query_folded)
+            while start >= 0:
+                end = start + len(query_folded)
+                yield (start, end)
+                start = line_folded.find(query_folded, end)
+    else:
+        def matcher(line):
+            yield (0, 0)
 
     # logfiles.dir2files is a dictionary whose keys reflect any logdir given
     # in the config file
@@ -185,14 +202,7 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             line = raw_line.decode(charset, errors="replace")
 
             total_bytes += len_raw_line
-
-            matches = []
-            matchee = query_re.search(line, 0)
-            while matchee:
-                matches.append(matchee.span())
-                matchee = query_re.search(line, matchee.end() +
-                                          int(matchee.end() == matchee.start()))
-            found, matches = eval_matches(matches, line)
+            found, matches = eval_matches(list(matcher(line)), line)
 
             if not found:
                 if num_after < after:
