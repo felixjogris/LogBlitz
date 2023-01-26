@@ -416,10 +416,10 @@ except LookupError as _:
     charset = "ISO-8859-1"
 
 is_https = os.environ.get("HTTPS", "off") == "on"
-for c in cookies.keys():
-    cookies[c]["Max-Age"] = COOKIE_MAX_AGE
-    cookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
-    cookies[c]["Secure"] = is_https
+for c in rawcookies.keys():
+    rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
+    rawcookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
+    rawcookies[c]["Secure"] = is_https
 
 error, filefilter_re = re_compile_with_error(filefilter)
 error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
@@ -756,8 +756,11 @@ function setCookie (elemId, cookieName)
   var elem = document.getElementById(elemId);
   if (elem) {
     var show = (elem.checked ? "True" : "False");
-    document.cookie = cookieName + "=" + show + "; max-age="""
-        f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; " if is_https else ""}";"""
+    document.cookie = """
+        f"""cookieName{" + '_%s'" % html.escape(remote_user)
+                       if remote_user else ""} + "=" + show + "; max-age="""
+        f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; "
+                                                if is_https else ""}";"""
         """
   }
 }
@@ -767,7 +770,7 @@ function setCookie (elemId, cookieName)
 
 print("Content-Type: text/html; charset=utf-8\r\n"
       f'Content-Length: {len(result.encode("utf-8"))}')
-if cookies:
-    print(cookies)
+if rawcookies:
+    print(rawcookies)
 print()
 print(result, end="")
