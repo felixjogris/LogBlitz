@@ -313,38 +313,45 @@ else:
 
 fileselect = []
 
-cookies = http.cookies.SimpleCookie()
+rawcookies = http.cookies.SimpleCookie()
 try:
-    cookies.load(os.environ.get("HTTP_COOKIE", ""))
+    rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
 except Exception as _:
     pass
 
-query = cookies["query"].value if "query" in cookies else ""
-reverse = "reverse" in cookies and cookies["reverse"].value == "True"
-ignorecase = "ignorecase" in cookies and cookies["ignorecase"].value == "True"
-invert = "invert" in cookies and cookies["invert"].value == "True"
-regex = "regex" in cookies and cookies["regex"].value == "True"
+if remote_user:
+    cookies = {x[0].removesuffix("_%s" % remote_user): x[1].value
+               for x in rawcookies.items()
+               if x[0].endswith("_%s" % remote_user)}
+else:
+    cookies = {x[0]: x[1].value for x in rawcookies.items()}
+
+query = cookies["query"] if "query" in cookies else ""
+reverse = "reverse" in cookies and cookies["reverse"] == "True"
+ignorecase = "ignorecase" in cookies and cookies["ignorecase"] == "True"
+invert = "invert" in cookies and cookies["invert"] == "True"
+regex = "regex" in cookies and cookies["regex"] == "True"
 showlinenumbers = ("showlinenumbers" in cookies and
-                   cookies["showlinenumbers"].value == "True")
+                   cookies["showlinenumbers"] == "True")
 showdotfiles = ("showdotfiles" in cookies and
-                cookies["showdotfiles"].value == "True")
+                cookies["showdotfiles"] == "True")
 showunreadables = ("showunreadables" in cookies and
-                   cookies["showunreadables"].value == "True")
-charset = cookies["charset"].value if "charset" in cookies else charset
-filefilter = cookies["filefilter"].value if "filefilter" in cookies else ""
-tmp = cookies["limitlines"].value if "limitlines" in cookies else "1000"
+                   cookies["showunreadables"] == "True")
+charset = cookies["charset"] if "charset" in cookies else charset
+filefilter = cookies["filefilter"] if "filefilter" in cookies else ""
+tmp = cookies["limitlines"] if "limitlines" in cookies else "1000"
 if tmp == "" or tmp.isnumeric():
     limitlines = tmp
-tmp = cookies["limitmemory"].value if "limitmemory" in cookies else "1"
+tmp = cookies["limitmemory"] if "limitmemory" in cookies else "1"
 if tmp == "" or tmp.isnumeric():
     limitmemory = tmp
-tmp = cookies["before"].value if "before" in cookies else "0"
+tmp = cookies["before"] if "before" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     before = tmp
-tmp = cookies["after"].value if "after" in cookies else "0"
+tmp = cookies["after"] if "after" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     after = tmp
-fileselectshown = [x[1].value for x in cookies.items()
+fileselectshown = [x[1] for x in cookies.items()
                    if x[0].startswith("fileselect")]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
@@ -388,10 +395,19 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["filefilter"] = filefilter
     cookies["limitlines"] = limitlines
     cookies["limitmemory"] = limitmemory
+
     for fs in enumerate(fileselectshown):
         cookies["fileselect%d" % fs[0]] = ""
     for fs in enumerate(fileselect):
         cookies["fileselect%d" % fs[0]] = fs[1]
+
+    rawcookies.clear()
+    if remote_user:
+        for k, v in cookies.items():
+            rawcookies["%s_%s" % (k, remote_user)] = v
+    else:
+        rawcookies.load(cookies)
+
     fileselectshown = fileselect
 
 try:
