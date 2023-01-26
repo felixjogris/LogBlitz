@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "10"
+VERSION = "11"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -344,6 +344,8 @@ if tmp == "" or tmp.isnumeric():
 tmp = cookies["after"].value if "after" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     after = tmp
+fileselectshown = [x[1].value for x in cookies.items()
+                   if x[0].startswith("fileselect")]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
@@ -386,6 +388,11 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["filefilter"] = filefilter
     cookies["limitlines"] = limitlines
     cookies["limitmemory"] = limitmemory
+    for fs in enumerate(fileselectshown):
+        cookies["fileselect%d" % fs[0]] = ""
+    for fs in enumerate(fileselect):
+        cookies["fileselect%d" % fs[0]] = fs[1]
+    fileselectshown = fileselect
 
 try:
     codecs.lookup(charset)
@@ -623,7 +630,8 @@ for logdir in sorted(logfiles.dir2files):
                   len(logfile["name"]) + 1)
 
         if "path" in logfile:
-            selected = (' selected="selected"' if logfile["path"] in fileselect
+            selected = (' selected="selected"'
+                        if logfile["path"] in fileselectshown
                         else "")
             style = ("" if logfile["readable"] else
                      ' style="text-decoration:line-through"')
