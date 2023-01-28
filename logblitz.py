@@ -326,6 +326,8 @@ if remote_user:
 else:
     cookies = {x[0]: x[1].value for x in rawcookies.items()}
 
+rawcookies.clear()
+
 query = cookies["query"] if "query" in cookies else ""
 reverse = "reverse" in cookies and cookies["reverse"] == "True"
 ignorecase = "ignorecase" in cookies and cookies["ignorecase"] == "True"
@@ -401,7 +403,6 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     for fs in enumerate(fileselect):
         cookies["fileselect%d" % fs[0]] = fs[1]
 
-    rawcookies.clear()
     if remote_user:
         for k, v in cookies.items():
             rawcookies["%s_%s" % (k, remote_user)] = v
