@@ -295,16 +295,16 @@ else:
     role = ""
 
 if role:
-    csuffix = role
+    csuffix = "_%s" % role
 elif remote_user:
-    csuffix = remote_user
+    csuffix = "_%s" % remote_user
 else:
     csuffix = ""
 
 if csuffix:
-    cookies = {x[0].removesuffix("_%s" % csuffix): x[1].value
+    cookies = {x[0].removesuffix(csuffix): x[1].value
                for x in rawcookies.items()
-               if x[0].endswith("_%s" % csuffix)}
+               if x[0].endswith(csuffix)}
 else:
     cookies = {x[0]: x[1].value for x in rawcookies.items()}
 
@@ -387,8 +387,14 @@ if tmp == "" or tmp.isnumeric():
 tmp = cookies["after"] if "after" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     after = tmp
-fileselectshown = [x[1] for x in cookies.items()
-                   if x[0].startswith("fileselect")]
+if csuffix:
+    fileselectshown = [x[1] for x in cookies.items()
+                       if x[0].startswith("fileselect") and
+                       x[0].endswith(csuffix)]
+else:
+    fileselectshown = [x[1] for x in cookies.items()
+                       if x[0].startswith("fileselect") and
+                       not "_" in x[0]]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies.clear()
@@ -439,11 +445,8 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         for fs in enumerate(fileselect):
             cookies["fileselect%d" % fs[0]] = fs[1]
 
-        if csuffix:
-            for k, v in cookies.items():
-                rawcookies["%s_%s" % (k, csuffix)] = v
-        else:
-            rawcookies.load(cookies)
+        for k, v in cookies.items():
+            rawcookies["%s%s" % (k, csuffix)] = v
 
         fileselectshown = fileselect
 
