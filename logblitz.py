@@ -278,27 +278,46 @@ def re_compile_with_error(filter_text):
     return None, filter_re
 
 
-configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
-                          "logblitz.ini")
-config = configparser.ConfigParser()
-config.read(configfile)
-
-remote_user = os.environ.get("REMOTE_USER")
-role = ""
-roles = []
-roles_error = None
-
 rawcookies = http.cookies.SimpleCookie()
 try:
     rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
 except Exception as _:
     pass
 
-if remote_user:
-    cookies = {x[0].removesuffix("_%s" % remote_user): x[1].value
-               for x in rawcookies.items()
-               if x[0].endswith("_%s" % remote_user)}
+remote_user = os.environ.get("REMOTE_USER")
+remote_user = "testnase"
+if os.environ.get("REQUEST_METHOD", "GET") == "POST":
+    form = cgi.FieldStorage()
+    role = form.getvalue("role", "")
+elif remote_user and "role_%s" % remote_user in rawcookies:
+    role = rawcookies["role_%s" % remote_user].value
+else:
+    role = ""
 
+if role:
+    csuffix = role
+elif remote_user:
+    csuffix = remote_user
+else:
+    csuffix = ""
+
+if csuffix:
+    cookies = {x[0].removesuffix("_%s" % csuffix): x[1].value
+               for x in rawcookies.items()
+               if x[0].endswith("_%s" % csuffix)}
+else:
+    cookies = {x[0]: x[1].value for x in rawcookies.items()}
+
+rawcookies.clear()
+
+configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
+                          "logblitz.ini")
+config = configparser.ConfigParser()
+config.read(configfile)
+
+roles = []
+roles_error = None
+if remote_user:
     for section in [s for s in config if config.has_option(s, "users")]:
         users = config.get(section, "users")
         err, users_re = re_compile_with_error(users)
@@ -306,13 +325,8 @@ if remote_user:
             roles_error = section + ": " + users + ": " + str(err)
         elif users_re.search(remote_user):
             roles.append(section)
-else:
-    cookies = {x[0]: x[1].value for x in rawcookies.items()}
 
-rawcookies.clear()
-
-if "role" in cookies and cookies["role"] in roles:
-    role = cookies["role"]
+if role and role in roles:
     config_section = role
 elif remote_user and not config.has_option(remote_user, "users"):
     config_section = remote_user
@@ -321,26 +335,36 @@ else:
 
 if config.has_option(config_section, "logdirs"):
     logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
+elif config.has_option("DEFAULT", "logdirs"):
+    logdirs = config.get("DEFAULT", "logdirs").split(os.path.pathsep)
 else:
     logdirs = []
 
 if config.has_option(config_section, "charset"):
     charset = config.get(config_section, "charset")
+elif config.has_option("DEFAULT", "charset"):
+    charset = config.get("DEFAULT", "charset")
 else:
     charset = ""
 
 if config.has_option(config_section, "dirfilter"):
     cfgdirfilter = config.get(config_section, "dirfilter")
+elif config.has_option("DEFAULT", "dirfilter"):
+    cfgdirfilter = config.get("DEFAULT", "dirfilter")
 else:
     cfgdirfilter = ""
 
 if config.has_option(config_section, "filefilter"):
     cfgfilefilter = config.get(config_section, "filefilter")
+elif config.has_option("DEFAULT", "filefilter"):
+    cfgfilefilter = config.get("DEFAULT", "filefilter")
 else:
     cfgfilefilter = ""
 
 if config.has_option(config_section, "logout_url"):
     logout_url = config.get(config_section, "logout_url")
+elif config.has_option("DEFAULT", "logout_url"):
+    logout_url = config.get("DEFAULT", "logout_url")
 else:
     logout_url = ""
 
@@ -375,32 +399,37 @@ fileselectshown = [x[1] for x in cookies.items()
                    if x[0].startswith("fileselect")]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
-    form = cgi.FieldStorage()
-    query = form.getvalue("query", "")
-    reverse = "reverse" in form
-    ignorecase = "ignorecase" in form
-    invert = "invert" in form
-    regex = "regex" in form
-    showlinenumbers = "showlinenumbers" in form
-    showdotfiles = "showdotfiles" in form
-    showunreadables = "showunreadables" in form
-    charset = form.getvalue("charset", "")
-    filefilter = form.getvalue("filefilter", "")
-    fileselect = form.getlist("fileselect")
-    tmp = form.getvalue("limitlines", "")
-    if tmp == "" or tmp.isnumeric():
-        limitlines = tmp
-    tmp = form.getvalue("limitmemory", "")
-    if tmp == "" or tmp.isnumeric():
-        limitmemory = tmp
-    tmp = form.getvalue("before", "")
-    if tmp == "" or tmp.isnumeric():
-        before = tmp
-    tmp = form.getvalue("after", "")
-    if tmp == "" or tmp.isnumeric():
-        after = tmp
-
     cookies.clear()
+
+    oldrole = form.getvalue("oldrole", "")
+    if role == oldrole:
+        query = form.getvalue("query", "")
+        reverse = "reverse" in form
+        ignorecase = "ignorecase" in form
+        invert = "invert" in form
+        regex = "regex" in form
+        showlinenumbers = "showlinenumbers" in form
+        showdotfiles = "showdotfiles" in form
+        showunreadables = "showunreadables" in form
+        charset = form.getvalue("charset", "")
+        filefilter = form.getvalue("filefilter", "")
+        fileselect = form.getlist("fileselect")
+        tmp = form.getvalue("limitlines", "")
+        if tmp == "" or tmp.isnumeric():
+            limitlines = tmp
+        tmp = form.getvalue("limitmemory", "")
+        if tmp == "" or tmp.isnumeric():
+            limitmemory = tmp
+        tmp = form.getvalue("before", "")
+        if tmp == "" or tmp.isnumeric():
+            before = tmp
+        tmp = form.getvalue("after", "")
+        if tmp == "" or tmp.isnumeric():
+            after = tmp
+
+        for fs in enumerate(fileselectshown):
+            cookies["fileselect%d" % fs[0]] = ""
+
     cookies["query"] = query
     cookies["reverse"] = reverse
     cookies["ignorecase"] = ignorecase
@@ -416,21 +445,20 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies["limitlines"] = limitlines
     cookies["limitmemory"] = limitmemory
 
-    for fs in enumerate(fileselectshown):
-        cookies["fileselect%d" % fs[0]] = ""
     for fs in enumerate(fileselect):
         cookies["fileselect%d" % fs[0]] = fs[1]
 
-    if role:
-        cookies["role"] = role
-
-    if remote_user:
+    if csuffix:
         for k, v in cookies.items():
-            rawcookies["%s_%s" % (k, remote_user)] = v
+            rawcookies["%s_%s" % (k, csuffix)] = v
     else:
         rawcookies.load(cookies)
 
-    fileselectshown = fileselect
+    if remote_user:
+        rawcookies["role_%s" % remote_user] = role
+
+    if role == oldrole:
+        fileselectshown = fileselect
 
 try:
     codecs.lookup(charset)
@@ -736,6 +764,7 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 </div>
 
 </div>
+<input type="hidden" name="oldrole" value="{html.escape(role)}">
 </form>
 """
         """<script>
