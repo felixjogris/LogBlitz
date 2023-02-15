@@ -285,7 +285,7 @@ except Exception as _:
     pass
 
 remote_user = os.environ.get("REMOTE_USER")
-remote_user = "testnase"
+
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
     role = form.getvalue("role", "")
@@ -328,36 +328,28 @@ if remote_user:
 
 if role and role in roles:
     config_section = role
-elif remote_user and not config.has_option(remote_user, "users"):
+elif remote_user:
     config_section = remote_user
 else:
     config_section = "DEFAULT"
 
 if config.has_option(config_section, "logdirs"):
     logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
-elif config.has_option("DEFAULT", "logdirs"):
-    logdirs = config.get("DEFAULT", "logdirs").split(os.path.pathsep)
 else:
     logdirs = []
 
 if config.has_option(config_section, "charset"):
     charset = config.get(config_section, "charset")
-elif config.has_option("DEFAULT", "charset"):
-    charset = config.get("DEFAULT", "charset")
 else:
     charset = ""
 
 if config.has_option(config_section, "dirfilter"):
     cfgdirfilter = config.get(config_section, "dirfilter")
-elif config.has_option("DEFAULT", "dirfilter"):
-    cfgdirfilter = config.get("DEFAULT", "dirfilter")
 else:
     cfgdirfilter = ""
 
 if config.has_option(config_section, "filefilter"):
     cfgfilefilter = config.get(config_section, "filefilter")
-elif config.has_option("DEFAULT", "filefilter"):
-    cfgfilefilter = config.get("DEFAULT", "filefilter")
 else:
     cfgfilefilter = ""
 
