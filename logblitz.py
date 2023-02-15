@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "11"
+VERSION = "12"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -284,7 +284,40 @@ config = configparser.ConfigParser()
 config.read(configfile)
 
 remote_user = os.environ.get("REMOTE_USER")
-config_section = remote_user if remote_user else "DEFAULT"
+role = ""
+roles = []
+roles_error = None
+
+rawcookies = http.cookies.SimpleCookie()
+try:
+    rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
+except Exception as _:
+    pass
+
+if remote_user:
+    cookies = {x[0].removesuffix("_%s" % remote_user): x[1].value
+               for x in rawcookies.items()
+               if x[0].endswith("_%s" % remote_user)}
+
+    for section in [s for s in config if config.has_option(s, "users")]:
+        users = config.get(section, "users")
+        err, users_re = re_compile_with_error(users)
+        if err:
+            roles_error = section + ": " + users + ": " + str(err)
+        elif users_re.search(remote_user):
+            roles.append(section)
+else:
+    cookies = {x[0]: x[1].value for x in rawcookies.items()}
+
+rawcookies.clear()
+
+if "role" in cookies and cookies["role"] in roles:
+    role = cookies["role"]
+    config_section = role
+elif remote_user and not config.has_option(remote_user, "users"):
+    config_section = remote_user
+else:
+    config_section = "DEFAULT"
 
 if config.has_option(config_section, "logdirs"):
     logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
@@ -312,21 +345,6 @@ else:
     logout_url = ""
 
 fileselect = []
-
-rawcookies = http.cookies.SimpleCookie()
-try:
-    rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
-except Exception as _:
-    pass
-
-if remote_user:
-    cookies = {x[0].removesuffix("_%s" % remote_user): x[1].value
-               for x in rawcookies.items()
-               if x[0].endswith("_%s" % remote_user)}
-else:
-    cookies = {x[0]: x[1].value for x in rawcookies.items()}
-
-rawcookies.clear()
 
 query = cookies["query"] if "query" in cookies else ""
 reverse = "reverse" in cookies and cookies["reverse"] == "True"
@@ -403,6 +421,9 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     for fs in enumerate(fileselect):
         cookies["fileselect%d" % fs[0]] = fs[1]
 
+    if role:
+        cookies["role"] = role
+
     if remote_user:
         for k, v in cookies.items():
             rawcookies["%s_%s" % (k, remote_user)] = v
@@ -428,7 +449,10 @@ error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 
 logfiles = LogFiles()
 
-if not cfgdirfilter_re:
+if roles_error:
+    html_status, html_lines = "", ("Error: Invalid users in INI file: ",
+                                   html.escape(roles_error))
+elif not cfgdirfilter_re:
     html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
                                    html.escape(cfgdirfilter), ": ",
                                    html.escape(str(error)))
@@ -664,7 +688,7 @@ for logdir in sorted(logfiles.dir2files):
 
     result += "</optgroup>\n"
 
-result += (f"""</select>
+result += f"""</select>
 </div>
 
 <div class="bar" id="barm"></div>
@@ -684,6 +708,17 @@ result += (f"""</select>
 <div class="sbb">
 {html_status}
 <span style="float:right">
+<span title="Role" style="margin-right:10px">Role:
+<select name="role">
+<option></option>
+"""
+
+for r in sorted(roles):
+    result += ("<option" + (' selected="selected"' if r == role else "") +
+               ">" + html.escape(r) + "</option>\n")
+
+result += (f"""</select>
+</span>
 <span style="margin-right:10px">
 Run time: {"%.1fs" % (time.perf_counter() - start_time,)}
 </span>
