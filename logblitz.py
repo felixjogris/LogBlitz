@@ -427,38 +427,36 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         if tmp == "" or tmp.isnumeric():
             after = tmp
 
+        cookies["query"] = query
+        cookies["reverse"] = reverse
+        cookies["ignorecase"] = ignorecase
+        cookies["invert"] = invert
+        cookies["regex"] = regex
+        cookies["before"] = before
+        cookies["after"] = after
+        cookies["showlinenumbers"] = showlinenumbers
+        cookies["showdotfiles"] = showdotfiles
+        cookies["showunreadables"] = showunreadables
+        cookies["charset"] = charset
+        cookies["filefilter"] = filefilter
+        cookies["limitlines"] = limitlines
+        cookies["limitmemory"] = limitmemory
+
         for fs in enumerate(fileselectshown):
             cookies["fileselect%d" % fs[0]] = ""
+        for fs in enumerate(fileselect):
+            cookies["fileselect%d" % fs[0]] = fs[1]
 
-    cookies["query"] = query
-    cookies["reverse"] = reverse
-    cookies["ignorecase"] = ignorecase
-    cookies["invert"] = invert
-    cookies["regex"] = regex
-    cookies["before"] = before
-    cookies["after"] = after
-    cookies["showlinenumbers"] = showlinenumbers
-    cookies["showdotfiles"] = showdotfiles
-    cookies["showunreadables"] = showunreadables
-    cookies["charset"] = charset
-    cookies["filefilter"] = filefilter
-    cookies["limitlines"] = limitlines
-    cookies["limitmemory"] = limitmemory
+        if csuffix:
+            for k, v in cookies.items():
+                rawcookies["%s_%s" % (k, csuffix)] = v
+        else:
+            rawcookies.load(cookies)
 
-    for fs in enumerate(fileselect):
-        cookies["fileselect%d" % fs[0]] = fs[1]
-
-    if csuffix:
-        for k, v in cookies.items():
-            rawcookies["%s_%s" % (k, csuffix)] = v
-    else:
-        rawcookies.load(cookies)
+        fileselectshown = fileselect
 
     if remote_user:
         rawcookies["role_%s" % remote_user] = role
-
-    if role == oldrole:
-        fileselectshown = fileselect
 
 try:
     codecs.lookup(charset)
