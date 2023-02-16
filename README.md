@@ -20,6 +20,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    logdirs = /var/log:/var/www/localhost/logs
    charset = ISO-8859-15
    logout_url = https://my.server.test/cgi-bin/logout.py
+   nice_username_env = REMOTE_USER_FULLNAME
 
    [user1]
    logdirs = /var/www/webpage1/logs:/var/www/webpage2/logs
@@ -52,6 +53,8 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    Users tina and ulf may select either role1 or role2 from a dropdown. Role1 allows them to read any (compressed) log file from /var/www1/logs, whose name ends with .gz, whereas role2 allows them to read any log files from /var/www2/logs, whose name ends with .bz2.
 
    LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
+
+   Since *logout_url* is set, LogBlitz will show a "Logout" link in the upper right corner. If hover your mouse over that link, a popup will show your username, which is expected in the environment variable *REMOTE_USER_FULLNAME* instead of the default *REMOTE_USER*.
 
 5. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
