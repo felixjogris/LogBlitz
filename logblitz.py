@@ -378,6 +378,13 @@ elif config.has_option("DEFAULT", "logout_url"):
 else:
     logout_url = ""
 
+if config.has_option(config_section, "nice_username_env"):
+    nice_username_env = config.get(config_section, "nice_username_env")
+elif config.has_option("DEFAULT", "nice_username_env"):
+    nice_username_env = config.get("DEFAULT", "nice_username_env")
+else:
+    nice_username_env = ""
+
 fileselect = []
 
 query = cookies["query"] if "query" in cookies else ""
@@ -685,9 +692,14 @@ optgroup {
  limit</span>""")
 
 if logout_url:
+    if nice_username_env in os.environ:
+        nice_username = os.environ[nice_username_env]
+    else
+        nice_username = remote_user
+
     result += (f"""<span style="float:right; margin-right:5px">
 <a href="{logout_url}" title="Logout{
-html.escape(" user %s" % (remote_user,)) if remote_user else ""
+html.escape(" user %s" % (nice_username,)) if nice_username else ""
 }">Logout</a></span>""")
 
 result += ("""</span>
