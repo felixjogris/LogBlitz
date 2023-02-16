@@ -42,6 +42,11 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    users = ^(tina|ulf)$
    logdirs = /var/www2/logs
    filefilter = .bz2$
+
+   [role3]
+   env_REMOTE_USER_EMAIL = ^.+@localhost$
+   logdirs = /var/www2/logs
+   filefilter = .log$
    ```
 
    Any unnamed user and any user, who has not its section (e.g. [user4]), may search through logfiles in /var/log and /var/www/localhost/logs (if the user under which the webserver runs, is allowed to read those directories and/or logfiles). ISO-8859-15 is the default charset for any logfile, but logfiles in /var/log/mysql are decoded to UTF-8. Every user can specify an alternate charset in the web interface. If you don't provide a charset in the config file nor in the web interface, ISO-8859-1 is used by default.
@@ -51,6 +56,8 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    User *user3* is allowed to read logfile, which name starts with "samba", and if it resides in /var/log, /var/www/localhost/logs (as from the default section), and in any subdirectory, which name either is "jail" or contains "fileserver".
 
    Users tina and ulf may select either role1 or role2 from a dropdown. Role1 allows them to read any (compressed) log file from /var/www1/logs, whose name ends with .gz, whereas role2 allows them to read any log files from /var/www2/logs, whose name ends with .bz2.
+
+   Any user, for whom the webserver's authentication module sets an environment variable named *REMOTE_USER_EMAIL* to a value like "someuser@localhost", is allowed to read any log file from /var/www2/logs, whose name ends with .log.
 
    LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
