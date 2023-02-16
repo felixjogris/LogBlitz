@@ -694,7 +694,7 @@ optgroup {
 if logout_url:
     if nice_username_env in os.environ:
         nice_username = os.environ[nice_username_env]
-    else
+    else:
         nice_username = remote_user
 
     result += (f"""<span style="float:right; margin-right:5px">
