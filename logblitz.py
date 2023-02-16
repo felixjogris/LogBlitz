@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "12"
+VERSION = "13"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -285,45 +285,63 @@ except Exception as _:
     pass
 
 remote_user = os.environ.get("REMOTE_USER")
+sane_ruser = re.sub(r"[^a-zA-Z0-9.-]", "_",
+                    (remote_user if remote_user else ""))
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     form = cgi.FieldStorage()
     role = form.getvalue("role", "")
-elif remote_user and "role_%s" % remote_user in rawcookies:
-    role = rawcookies["role_%s" % remote_user].value
+elif remote_user and "role_%s" % sane_ruser in rawcookies:
+    role = rawcookies["role_%s" % sane_ruser].value
 else:
     role = ""
 
 if role:
     csuffix = "_%s" % role
 elif remote_user:
-    csuffix = "_%s" % remote_user
+    csuffix = "_%s" % sane_ruser
 else:
     csuffix = ""
 
-if csuffix:
-    cookies = {x[0].removesuffix(csuffix): x[1].value
-               for x in rawcookies.items()
-               if x[0].endswith(csuffix)}
-else:
-    cookies = {x[0]: x[1].value for x in rawcookies.items()}
+cookies = {x[0].removesuffix(csuffix): x[1].value
+           for x in rawcookies.items()
+           if x[0].endswith(csuffix)}
 
 rawcookies.clear()
 
 configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
                           "logblitz.ini")
 config = configparser.ConfigParser()
+config.optionxform = str
 config.read(configfile)
 
 roles = []
 roles_error = None
 if remote_user:
-    for section in [s for s in config if config.has_option(s, "users")]:
-        users = config.get(section, "users")
-        err, users_re = re_compile_with_error(users)
-        if err:
-            roles_error = section + ": " + users + ": " + str(err)
-        elif users_re.search(remote_user):
+    for section, options in config.items():
+        add_section = None
+        for k, v in options.items():
+            if k == "users":
+                err, users_re = re_compile_with_error(v)
+                if err:
+                    roles_error = "[%s]: %s: %s: %s" % (section, k, v,
+                                                        str(err))
+                    add_section = False
+                else:
+                    add_section = ((add_section is None or add_section) and
+                                   users_re.search(remote_user))
+            elif k.startswith("env_"):
+                envname = k.removeprefix("env_")
+                err, env_re = re_compile_with_error(v)
+                if err:
+                    roles_error = "[%s]: %s: %s: %s" % (section, k, v,
+                                                        str(err))
+                    add_section = False
+                else:
+                    add_section = ((add_section is None or add_section) and
+                                   envname in os.environ and
+                                   env_re.search(os.environ[envname]))
+        if add_section:
             roles.append(section)
 
 if role and role in roles:
@@ -387,14 +405,9 @@ if tmp == "" or tmp.isnumeric():
 tmp = cookies["after"] if "after" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     after = tmp
-if csuffix:
-    fileselectshown = [x[1] for x in cookies.items()
-                       if x[0].startswith("fileselect") and
-                       x[0].endswith(csuffix)]
-else:
-    fileselectshown = [x[1] for x in cookies.items()
-                       if x[0].startswith("fileselect") and
-                       not "_" in x[0]]
+fileselectshown = [x[1] for x in cookies.items()
+                   if x[0].startswith("fileselect") and
+                   not "_" in x[0]]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies.clear()
@@ -451,7 +464,7 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         fileselectshown = fileselect
 
     if remote_user:
-        rawcookies["role_%s" % remote_user] = role
+        rawcookies["role_%s" % sane_ruser] = role
 
 try:
     codecs.lookup(charset)
@@ -471,7 +484,7 @@ error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 logfiles = LogFiles()
 
 if roles_error:
-    html_status, html_lines = "", ("Error: Invalid users in INI file: ",
+    html_status, html_lines = "", ("Error: Invalid roles in INI file: ",
                                    html.escape(roles_error))
 elif not cfgdirfilter_re:
     html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
@@ -815,7 +828,7 @@ function setCookie (elemId, cookieName)
   if (elem) {
     var show = (elem.checked ? "True" : "False");
     document.cookie = """
-        f"""cookieName{" + '_%s'" % html.escape(remote_user)
+        f"""cookieName{" + '_%s'" % html.escape(sane_ruser)
                        if remote_user else ""} + "=" + show + "; max-age="""
         f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; "
                                                 if is_https else ""}";"""
