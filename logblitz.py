@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "13"
+VERSION = "14"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -373,15 +373,16 @@ else:
 
 if config.has_option(config_section, "logout_url"):
     logout_url = config.get(config_section, "logout_url")
-elif config.has_option("DEFAULT", "logout_url"):
-    logout_url = config.get("DEFAULT", "logout_url")
 else:
     logout_url = ""
 
+if config.has_option(config_section, "logout_option"):
+    logout_option = config.get(config_section, "logout_option")
+else:
+    logout_option = ""
+
 if config.has_option(config_section, "nice_username_env"):
     nice_username_env = config.get(config_section, "nice_username_env")
-elif config.has_option("DEFAULT", "nice_username_env"):
-    nice_username_env = config.get("DEFAULT", "nice_username_env")
 else:
     nice_username_env = ""
 
@@ -700,7 +701,9 @@ if logout_url:
     result += (f"""<span style="float:right; margin-right:5px">
 <a href="{logout_url}" title="Logout{
 html.escape(" user %s" % (nice_username,)) if nice_username else ""
-}">Logout</a></span>""")
+}"{
+" %s" % (logout_option, ) if logout_option else ""
+}>Logout</a></span>""")
 
 result += ("""</span>
 </div>
