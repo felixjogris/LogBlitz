@@ -20,6 +20,7 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    logdirs = /var/log:/var/www/localhost/logs
    charset = ISO-8859-15
    logout_url = https://my.server.test/cgi-bin/logout.py
+   logout_option = onclick="window.close();"
    nice_username_env = REMOTE_USER_FULLNAME
 
    [user1]
@@ -62,6 +63,8 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
    LogBlitz expects the webserver to place the name of the authenticated user in the environment variable *REMOTE_USER*.
 
    Since *logout_url* is set, LogBlitz will show a "Logout" link in the upper right corner. If hover your mouse over that link, a popup will show your username, which is expected in the environment variable *REMOTE_USER_FULLNAME* instead of the default *REMOTE_USER*.
+
+   As *logout_option* is also set, that JavaScript snippet will be printed verbatim in the logout link (read: in the *a href* tag).
 
 5. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
