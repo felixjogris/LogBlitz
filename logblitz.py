@@ -12,7 +12,7 @@ except Exception as _:
     import re
     RE_MODULE = "re"
 
-VERSION = "14"
+VERSION = "15"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 
@@ -386,8 +386,6 @@ if config.has_option(config_section, "nice_username_env"):
 else:
     nice_username_env = ""
 
-fileselect = []
-
 query = cookies["query"] if "query" in cookies else ""
 reverse = "reverse" in cookies and cookies["reverse"] == "True"
 ignorecase = "ignorecase" in cookies and cookies["ignorecase"] == "True"
@@ -413,9 +411,10 @@ if tmp == "" or tmp.isnumeric():
 tmp = cookies["after"] if "after" in cookies else "0"
 if tmp == "" or tmp.isnumeric():
     after = tmp
-fileselectshown = [x[1] for x in cookies.items()
-                   if x[0].startswith("fileselect") and
-                   not "_" in x[0]]
+fileselect = (cookies["fileselect"].split(os.pathsep)
+              if "fileselect" in cookies else [])
+oldfileselect = [c for c in cookies.keys() if c.startswith("fileselect") and
+                 c != "fileselect"]
 
 if os.environ.get("REQUEST_METHOD", "GET") == "POST":
     cookies.clear()
@@ -460,16 +459,10 @@ if os.environ.get("REQUEST_METHOD", "GET") == "POST":
         cookies["filefilter"] = filefilter
         cookies["limitlines"] = limitlines
         cookies["limitmemory"] = limitmemory
-
-        for fs in enumerate(fileselectshown):
-            cookies["fileselect%d" % fs[0]] = ""
-        for fs in enumerate(fileselect):
-            cookies["fileselect%d" % fs[0]] = fs[1]
+        cookies["fileselect"] = os.pathsep.join(fileselect)
 
         for k, v in cookies.items():
             rawcookies["%s%s" % (k, csuffix)] = v
-
-        fileselectshown = fileselect
 
     if remote_user:
         rawcookies["role_%s" % sane_ruser] = role
@@ -484,6 +477,13 @@ for c in rawcookies.keys():
     rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
     rawcookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
     rawcookies[c]["Secure"] = is_https
+for c in oldfileselect:
+    rawcookies[c] = ""
+    rawcookies[c]["Max-Age"] = 0
+
+if len(str(rawcookies)) > 3072:
+    for k in [k for k in rawcookies.keys() if k.startswith("fileselect")]:
+        rawcookies.pop(k)
 
 error, filefilter_re = re_compile_with_error(filefilter)
 error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
@@ -721,7 +721,7 @@ for logdir in sorted(logfiles.dir2files):
 
         if "path" in logfile:
             selected = (' selected="selected"'
-                        if logfile["path"] in fileselectshown
+                        if logfile["path"] in fileselect
                         else "")
             style = ("" if logfile["readable"] else
                      ' style="text-decoration:line-through"')
