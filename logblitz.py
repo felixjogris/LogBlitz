@@ -287,8 +287,9 @@ except Exception as _:
 remote_user = os.environ.get("REMOTE_USER")
 sane_ruser = re.sub(r"[^a-zA-Z0-9.-]", "_",
                     (remote_user if remote_user else ""))
+is_post = (os.environ.get("REQUEST_METHOD", "GET") == "POST")
 
-if os.environ.get("REQUEST_METHOD", "GET") == "POST":
+if is_post:
     form = cgi.FieldStorage()
     role = form.getvalue("role", "")
 elif remote_user and "role_%s" % sane_ruser in rawcookies:
@@ -416,7 +417,7 @@ fileselect = (cookies["fileselect"].split(os.pathsep)
 oldfileselect = [c for c in cookies.keys() if c.startswith("fileselect") and
                  c != "fileselect"]
 
-if os.environ.get("REQUEST_METHOD", "GET") == "POST":
+if is_post:
     cookies.clear()
 
     oldrole = form.getvalue("oldrole", "")
@@ -518,10 +519,14 @@ else:
                            showunreadables):
             logfiles.shown_dirs += 1
 
-    html_status, html_lines = search(charset, logdirs, logfiles, fileselect,
-                                     query, reverse, ignorecase, invert,
-                                     regex, before, after, limitlines,
-                                     limitmemory)
+    if is_post and (role == oldrole):
+        html_status, html_lines = search(charset, logdirs, logfiles,
+                                         fileselect, query, reverse,
+                                         ignorecase, invert, regex, before,
+                                         after, limitlines, limitmemory)
+    else:
+        html_status = ""
+        html_lines = []
 
 result = ("""<!DOCTYPE html>
 <html>
@@ -712,6 +717,9 @@ result += ("""</span>
 <select name="fileselect" multiple 
  style="font-family:monospace; height:100%; width:100%">""")
 
+logfiles_selected_files = 0
+logfiles_selected_bytes = 0
+
 for logdir in sorted(logfiles.dir2files):
     result += f'<optgroup label="{html.escape(logdir)}{os.path.sep}">\n'
 
@@ -720,9 +728,13 @@ for logdir in sorted(logfiles.dir2files):
                   len(logfile["name"]) + 1)
 
         if "path" in logfile:
-            selected = (' selected="selected"'
-                        if logfile["path"] in fileselect
-                        else "")
+            if logfile["path"] in fileselect:
+                selected = ' selected="selected"'
+                logfiles_selected_files += 1
+                logfiles_selected_bytes += logfile["size"]
+            else:
+                selected = ""
+
             style = ("" if logfile["readable"] else
                      ' style="text-decoration:line-through"')
             result += (f'<option value="{html.escape(logfile["path"])}"'
@@ -747,8 +759,9 @@ result += f"""</select>
 </div>
 
 <div class="sbb" id="filestatus">
-{logfiles.shown_files}/{logfiles.total_files} files
-({bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
+{logfiles_selected_files}/{logfiles.shown_files}/{logfiles.total_files} files
+({bytes_pretty(logfiles_selected_bytes)}/{
+  bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
 {logfiles.shown_dirs}/{logfiles.total_dirs} folders shown
 </div>
 
