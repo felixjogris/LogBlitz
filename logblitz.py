@@ -3,12 +3,22 @@
 import time
 start_time = time.perf_counter()
 
-import sys, os, datetime, html, cgi, gzip, bz2, configparser, lzma
-import collections, http.cookies, codecs
+import sys
+import os
+import datetime
+import html
+import cgi
+import gzip
+import bz2
+import configparser
+import lzma
+import collections
+import http.cookies
+import codecs
 try:
     import re2 as re
     RE_MODULE = "re2"
-except Exception as _:
+except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
