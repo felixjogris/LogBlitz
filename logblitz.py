@@ -22,9 +22,10 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "15"
+VERSION = "16"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
+
 
 class LogFiles:
     dir2files = {}
@@ -36,6 +37,7 @@ class LogFiles:
     shown_dirs = 0
     total_dirs = 0
 
+
 def bytes_pretty(filesize):
     if filesize < 1024:
         return f"{filesize}B"
@@ -45,20 +47,23 @@ def bytes_pretty(filesize):
             break
     return f"{filesize:.2f}{suffix}"
 
+
 def logfile_number_sorter(entry):
-    m = re.search("(?i:\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
+    m = re.search(r"(?i:\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
     return int(m.group(1)) if m else -1
 
+
 def logfile_prefix_sorter(entry):
-    m = re.match("(?i:(.*)\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
+    m = re.match(r"(?i:(.*)\.(\d+)(\.(bz2|gz|xz))?)$", entry.name)
     return m.group(1) if m else entry.name
+
 
 def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                     logfiles, showdotfiles, showunreadables,
                     subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
-    except Exception as _:
+    except OSError as _:
         return False
 
     if not showdotfiles:
@@ -74,7 +79,7 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
         relname = os.path.join(subdir, entry.name)
 
         if (entry.is_dir(follow_symlinks=False) and
-            cfgdirfilter_re.search(entry.name)):
+                cfgdirfilter_re.search(entry.name)):
             logfiles.total_dirs += 1
             cnt = len(dir2files)
             found_files = traverse_logdir(logdir, cfgdirfilter_re,
@@ -85,8 +90,9 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
             if found_files:
                 logfiles.shown_dirs += 1
                 dir2files.insert(cnt, {
-                    "name"   : entry.name + os.path.sep,
-                    "indent" : indent })
+                    "name":   entry.name + os.path.sep,
+                    "indent": indent
+                })
 
                 candid_name_indent_len = len(entry.name) + 1 + 2 * indent
                 if candid_name_indent_len > logfiles.max_name_indent_len:
@@ -112,20 +118,22 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                                   stat.st_mtime).strftime(DATETIME_FMT)
 
                 dir2files.append({
-                    "name"        : entry.name,
-                    "readable"    : readable,
-                    "indent"      : indent,
-                    "path"        : entry.path,
-                    "mtime"       : stat.st_mtime,
-                    "mtime_human" : mtime_human,
-                    "size"        : stat.st_size,
-                    "size_human"  : size_human })
+                    "name":        entry.name,
+                    "readable":    readable,
+                    "indent":      indent,
+                    "path":        entry.path,
+                    "mtime":       stat.st_mtime,
+                    "mtime_human": mtime_human,
+                    "size":        stat.st_size,
+                    "size_human":  size_human
+                })
 
                 candid_name_indent_len = len(entry.name) + 2 * indent
                 if candid_name_indent_len > logfiles.max_name_indent_len:
                     logfiles.max_name_indent_len = candid_name_indent_len
 
     return found_files
+
 
 def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
            invert, regex, before, after, limitlines, limitmemory):
@@ -144,10 +152,11 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
     after = int(after) if after else 0
 
     if invert:
-        eval_matches = (lambda matches, line:
-                        (len(matches) <= 0, ((0, len(line)),)))
+        def eval_matches(matches, line):
+            return len(matches) <= 0, ((0, len(line)),)
     else:
-        eval_matches = lambda matches, line: (len(matches) > 0, matches)
+        def eval_matches(matches, _):
+            return len(matches) > 0, matches
 
     if regex and query:
         try:
@@ -171,11 +180,11 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             start = line_folded.find(query_folded)
             while start >= 0:
                 end = start + len(query_folded)
-                yield (start, end)
+                yield start, end
                 start = line_folded.find(query_folded, end)
     else:
-        def matcher(line):
-            yield (0, 0)
+        def matcher(_):
+            yield 0, 0
 
     # logfiles.dir2files is a dictionary whose keys reflect any logdir given
     # in the config file
@@ -231,15 +240,15 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
                    (limit_lines <= shown_lines or
                     limit_bytes <= shown_bytes)):
                 shown_lines -= 1
-                l = lines.popleft()
-                shown_bytes -= l[2]
+                tmpline = lines.popleft()
+                shown_bytes -= tmpline[2]
 
             if (limit_lines > shown_lines and
-                limit_bytes > shown_bytes):
-                for l in b4buf:
+                    limit_bytes > shown_bytes):
+                for tmpline in b4buf:
                     shown_lines += 1
-                    shown_bytes += l[2]
-                    lines.append(l)
+                    shown_bytes += tmpline[2]
+                    lines.append(tmpline)
                 b4buf.clear()
                 num_after = 0
                 shown_lines += 1
@@ -267,17 +276,18 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             html_line.append(f"{html.escape(line[oldend:])}</div>\n")
             html_lines.append("".join(html_line))
 
-    html_status = ("<span"
-        f"""{' class="red"' if shown_lines >= limit_lines else ""}>"""
+    html_status = (
+        f"""<span{' class="red"' if shown_lines >= limit_lines else ""}>"""
         f"{shown_lines}</span> (<span"
         f"""{' class="red"' if shown_bytes >= limit_bytes else ""}>"""
         f"{bytes_pretty(shown_bytes)}</span>) lines shown, "
         f"{matching_lines} ({bytes_pretty(matching_bytes)}) matching, "
         f"{total_lines} ({bytes_pretty(total_bytes)}) total lines in "
-        f"{num_logfiles} selected log file"
-        f'{"" if num_logfiles == 1 else "s"}')
+        f'{num_logfiles} selected log file{"" if num_logfiles == 1 else "s"}'
+    )
 
     return html_status, html_lines
+
 
 def re_compile_with_error(filter_text):
     try:
@@ -291,7 +301,7 @@ def re_compile_with_error(filter_text):
 rawcookies = http.cookies.SimpleCookie()
 try:
     rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
-except Exception as _:
+except http.cookies.CookieError as _:
     pass
 
 remote_user = os.environ.get("REMOTE_USER")
@@ -496,9 +506,9 @@ if len(str(rawcookies)) > 3072:
     for k in [k for k in rawcookies.keys() if k.startswith("fileselect")]:
         rawcookies.pop(k)
 
-error, filefilter_re = re_compile_with_error(filefilter)
-error, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
-error, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
+error_ff, filefilter_re = re_compile_with_error(filefilter)
+error_cfgff, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
+error_cfgdf, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
 
 logfiles = LogFiles()
 
@@ -508,15 +518,15 @@ if roles_error:
 elif not cfgdirfilter_re:
     html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
                                    html.escape(cfgdirfilter), ": ",
-                                   html.escape(str(error)))
+                                   html.escape(str(error_cfgdf)))
 elif not cfgfilefilter_re:
     html_status, html_lines = "", ("Error: Invalid filefilter in INI file: ",
                                    html.escape(cfgfilefilter), ": ",
-                                   html.escape(str(error)))
+                                   html.escape(str(error_cfgff)))
 elif not filefilter_re:
     html_status, html_lines = "", ("Error: Invalid filefilter: ",
                                    html.escape(filefilter), ": ",
-                                   html.escape(str(error)))
+                                   html.escape(str(error_ff)))
 else:
     for logdir in logdirs:
         logfiles.total_dirs += 1
@@ -584,8 +594,8 @@ optgroup {
   margin-right: 2em;
   -webkit-user-select: none;
   display: """
-        f'{"inline" if showlinenumbers else "none"}'
-""";
+          f'{"inline" if showlinenumbers else "none"}'
+          """;
 }
 .red {
   color: red;
@@ -811,7 +821,7 @@ Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
 <input type="hidden" name="oldrole" value="{html.escape(role)}">
 </form>
 """
-        """<script>
+           """<script>
 document.querySelectorAll(".bar").forEach(function (elem) {
   elem.onmousedown = function (ev) {
     var fileFilter = document.getElementById("filefilter");
@@ -866,11 +876,11 @@ function setCookie (elemId, cookieName)
   if (elem) {
     var show = (elem.checked ? "True" : "False");
     document.cookie = """
-        f"""cookieName{" + '_%s'" % html.escape(sane_ruser)
-                       if remote_user else ""} + "=" + show + "; max-age="""
-        f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; "
-                                                if is_https else ""}";"""
-        """
+           f"""cookieName{" + '_%s'" % html.escape(sane_ruser)
+           if remote_user else ""} + "=" + show + "; max-age="""
+           f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; "
+           if is_https else ""}";"""
+           """
   }
 }
 </script>
