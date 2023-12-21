@@ -169,8 +169,10 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
             matchee = query_re.search(line, 0)
             while matchee:
                 yield matchee.span()
-                matchee = query_re.search(line, matchee.end() +
-                                          int(matchee.end() == matchee.start()))
+                matchee = query_re.search(
+                    line,
+                    matchee.end() + int(matchee.end() == matchee.start())
+                )
     elif query:
         fold_string = str.lower if ignorecase else str
         query_folded = fold_string(query)
@@ -261,20 +263,24 @@ def search(charset, logdirs, logfiles, fileselect, query, reverse, ignorecase,
         total_lines += line_number
         len_max_line_number = len(str(line_number))
 
-        html_lines.append(f'<div class="lf">{logfile["path"]}</div>\n')
+        html_lines += ['<div class="lf">',
+                       logfile["path"],
+                       "</div>"]
         for line in lines:
             line, matches, line_number = line[0], line[1], line[3]
-            html_line = [(
-                '<div class="sl"><span class="ln">'
-                f"{str(line_number).rjust(len_max_line_number)}</span>")]
+            html_line = ['<div class="sl"><span class="ln">',
+                         str(line_number).rjust(len_max_line_number),
+                         "</span>"]
             oldend = 0
             for m in matches:
-                html_line.append((
-                    f'{html.escape(line[oldend:m[0]])}<span class="sr">'
-                    f"{html.escape(line[m[0]:m[1]])}</span>"))
+                html_line += [html.escape(line[oldend:m[0]]),
+                              '<span class="sr">',
+                              html.escape(line[m[0]:m[1]]),
+                              "</span>"]
                 oldend = m[1]
-            html_line.append(f"{html.escape(line[oldend:])}</div>\n")
-            html_lines.append("".join(html_line))
+            html_line += [html.escape(line[oldend:]),
+                          "</div>"]
+            html_lines += ["".join(html_line)]
 
     html_status = (
         f"""<span{' class="red"' if shown_lines >= limit_lines else ""}>"""
@@ -298,257 +304,265 @@ def re_compile_with_error(filter_text):
     return None, filter_re
 
 
-rawcookies = http.cookies.SimpleCookie()
-try:
-    rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
-except http.cookies.CookieError:
-    pass
+def logblitz(environ, is_wsgi):
+    rawcookies = http.cookies.SimpleCookie()
+    try:
+        rawcookies.load(environ.get("HTTP_COOKIE", ""))
+    except http.cookies.CookieError:
+        pass
 
-remote_user = os.environ.get("REMOTE_USER")
-sane_ruser = re.sub(r"[^a-zA-Z0-9.-]", "_",
-                    (remote_user if remote_user else ""))
-is_post = (os.environ.get("REQUEST_METHOD", "GET") == "POST")
+    remote_user = environ.get("REMOTE_USER")
+    sane_ruser = re.sub(r"[^a-zA-Z0-9.-]", "_",
+                        (remote_user if remote_user else ""))
+    is_post = (environ.get("REQUEST_METHOD", "GET") == "POST")
 
-if is_post:
-    form = cgi.FieldStorage()
-    role = form.getvalue("role", "")
-elif remote_user and "role_%s" % sane_ruser in rawcookies:
-    role = rawcookies["role_%s" % sane_ruser].value
-else:
-    role = ""
-
-if role:
-    csuffix = "_%s" % role
-elif remote_user:
-    csuffix = "_%s" % sane_ruser
-else:
-    csuffix = ""
-
-cookies = {x[0].removesuffix(csuffix): x[1].value
-           for x in rawcookies.items()
-           if x[0].endswith(csuffix)}
-
-rawcookies.clear()
-
-configfile = os.path.join(os.path.dirname(sys.argv[0]), os.pardir, "etc",
-                          "logblitz.ini")
-config = configparser.ConfigParser()
-config.optionxform = str
-config.read(configfile)
-
-roles = []
-roles_error = None
-if remote_user:
-    for section, options in config.items():
-        add_section = None
-        for k, v in options.items():
-            if k == "users":
-                err, users_re = re_compile_with_error(v)
-                if err:
-                    roles_error = "[%s]: %s: %s: %s" % (section, k, v,
-                                                        str(err))
-                    add_section = False
-                else:
-                    add_section = ((add_section is None or add_section) and
-                                   users_re.search(remote_user))
-            elif k.startswith("env_"):
-                envname = k.removeprefix("env_")
-                err, env_re = re_compile_with_error(v)
-                if err:
-                    roles_error = "[%s]: %s: %s: %s" % (section, k, v,
-                                                        str(err))
-                    add_section = False
-                else:
-                    add_section = ((add_section is None or add_section) and
-                                   envname in os.environ and
-                                   env_re.search(os.environ[envname]))
-        if add_section:
-            roles.append(section)
-
-if role and role in roles:
-    config_section = role
-elif remote_user:
-    config_section = remote_user
-else:
-    config_section = "DEFAULT"
-
-if config.has_option(config_section, "logdirs"):
-    logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
-else:
-    logdirs = []
-
-if config.has_option(config_section, "charset"):
-    charset = config.get(config_section, "charset")
-else:
-    charset = ""
-
-if config.has_option(config_section, "dirfilter"):
-    cfgdirfilter = config.get(config_section, "dirfilter")
-else:
-    cfgdirfilter = ""
-
-if config.has_option(config_section, "filefilter"):
-    cfgfilefilter = config.get(config_section, "filefilter")
-else:
-    cfgfilefilter = ""
-
-if config.has_option(config_section, "logout_url"):
-    logout_url = config.get(config_section, "logout_url")
-else:
-    logout_url = ""
-
-if config.has_option(config_section, "logout_option"):
-    logout_option = config.get(config_section, "logout_option")
-else:
-    logout_option = ""
-
-if config.has_option(config_section, "nice_username_env"):
-    nice_username_env = config.get(config_section, "nice_username_env")
-else:
-    nice_username_env = ""
-
-query = cookies["query"] if "query" in cookies else ""
-reverse = "reverse" in cookies and cookies["reverse"] == "True"
-ignorecase = "ignorecase" in cookies and cookies["ignorecase"] == "True"
-invert = "invert" in cookies and cookies["invert"] == "True"
-regex = "regex" in cookies and cookies["regex"] == "True"
-showlinenumbers = ("showlinenumbers" in cookies and
-                   cookies["showlinenumbers"] == "True")
-showdotfiles = ("showdotfiles" in cookies and
-                cookies["showdotfiles"] == "True")
-showunreadables = ("showunreadables" in cookies and
-                   cookies["showunreadables"] == "True")
-charset = cookies["charset"] if "charset" in cookies else charset
-filefilter = cookies["filefilter"] if "filefilter" in cookies else ""
-tmp = cookies["limitlines"] if "limitlines" in cookies else "1000"
-if tmp == "" or tmp.isnumeric():
-    limitlines = tmp
-tmp = cookies["limitmemory"] if "limitmemory" in cookies else "1"
-if tmp == "" or tmp.isnumeric():
-    limitmemory = tmp
-tmp = cookies["before"] if "before" in cookies else "0"
-if tmp == "" or tmp.isnumeric():
-    before = tmp
-tmp = cookies["after"] if "after" in cookies else "0"
-if tmp == "" or tmp.isnumeric():
-    after = tmp
-fileselect = (cookies["fileselect"].split(os.pathsep)
-              if "fileselect" in cookies else [])
-oldfileselect = [c for c in cookies.keys() if c.startswith("fileselect") and
-                 c != "fileselect"]
-
-if is_post:
-    cookies.clear()
-
-    oldrole = form.getvalue("oldrole", "")
-    if role == oldrole:
-        query = form.getvalue("query", "")
-        reverse = "reverse" in form
-        ignorecase = "ignorecase" in form
-        invert = "invert" in form
-        regex = "regex" in form
-        showlinenumbers = "showlinenumbers" in form
-        showdotfiles = "showdotfiles" in form
-        showunreadables = "showunreadables" in form
-        charset = form.getvalue("charset", "")
-        filefilter = form.getvalue("filefilter", "")
-        fileselect = form.getlist("fileselect")
-        tmp = form.getvalue("limitlines", "")
-        if tmp == "" or tmp.isnumeric():
-            limitlines = tmp
-        tmp = form.getvalue("limitmemory", "")
-        if tmp == "" or tmp.isnumeric():
-            limitmemory = tmp
-        tmp = form.getvalue("before", "")
-        if tmp == "" or tmp.isnumeric():
-            before = tmp
-        tmp = form.getvalue("after", "")
-        if tmp == "" or tmp.isnumeric():
-            after = tmp
-
-        cookies["query"] = query
-        cookies["reverse"] = reverse
-        cookies["ignorecase"] = ignorecase
-        cookies["invert"] = invert
-        cookies["regex"] = regex
-        cookies["before"] = before
-        cookies["after"] = after
-        cookies["showlinenumbers"] = showlinenumbers
-        cookies["showdotfiles"] = showdotfiles
-        cookies["showunreadables"] = showunreadables
-        cookies["charset"] = charset
-        cookies["filefilter"] = filefilter
-        cookies["limitlines"] = limitlines
-        cookies["limitmemory"] = limitmemory
-        cookies["fileselect"] = os.pathsep.join(fileselect)
-
-        for k, v in cookies.items():
-            rawcookies["%s%s" % (k, csuffix)] = v
-
-    if remote_user:
-        rawcookies["role_%s" % sane_ruser] = role
-
-try:
-    codecs.lookup(charset)
-except LookupError:
-    charset = "ISO-8859-1"
-
-is_https = os.environ.get("HTTPS", "off") == "on"
-for c in rawcookies.keys():
-    rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
-    rawcookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
-    rawcookies[c]["Secure"] = is_https
-for c in oldfileselect:
-    rawcookies[c] = ""
-    rawcookies[c]["Max-Age"] = 0
-
-if len(str(rawcookies)) > 3072:
-    for k in [k for k in rawcookies.keys() if k.startswith("fileselect")]:
-        rawcookies.pop(k)
-
-error_ff, filefilter_re = re_compile_with_error(filefilter)
-error_cfgff, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
-error_cfgdf, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
-
-logfiles = LogFiles()
-
-if roles_error:
-    html_status, html_lines = "", ("Error: Invalid roles in INI file: ",
-                                   html.escape(roles_error))
-elif not cfgdirfilter_re:
-    html_status, html_lines = "", ("Error: Invalid dirfilter in INI file: ",
-                                   html.escape(cfgdirfilter), ": ",
-                                   html.escape(str(error_cfgdf)))
-elif not cfgfilefilter_re:
-    html_status, html_lines = "", ("Error: Invalid filefilter in INI file: ",
-                                   html.escape(cfgfilefilter), ": ",
-                                   html.escape(str(error_cfgff)))
-elif not filefilter_re:
-    html_status, html_lines = "", ("Error: Invalid filefilter: ",
-                                   html.escape(filefilter), ": ",
-                                   html.escape(str(error_ff)))
-else:
-    for logdir in logdirs:
-        logfiles.total_dirs += 1
-
-        if logdir.endswith(os.path.sep):
-            logdir = logdir[:-1]
-
-        if traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re,
-                           filefilter_re, logfiles, showdotfiles,
-                           showunreadables):
-            logfiles.shown_dirs += 1
-
-    if is_post and (role == oldrole):
-        html_status, html_lines = search(charset, logdirs, logfiles,
-                                         fileselect, query, reverse,
-                                         ignorecase, invert, regex, before,
-                                         after, limitlines, limitmemory)
+    if is_post:
+        form = cgi.FieldStorage()
+        role = form.getvalue("role", "")
+    elif remote_user and "role_%s" % sane_ruser in rawcookies:
+        role = rawcookies["role_%s" % sane_ruser].value
     else:
-        html_status = ""
-        html_lines = []
+        role = ""
 
-result = ("""<!DOCTYPE html>
+    if role:
+        csuffix = "_%s" % role
+    elif remote_user:
+        csuffix = "_%s" % sane_ruser
+    else:
+        csuffix = ""
+
+    cookies = {x[0].removesuffix(csuffix): x[1].value
+               for x in rawcookies.items()
+               if x[0].endswith(csuffix)}
+
+    rawcookies.clear()
+
+    if is_wsgi:
+        configfile = os.getcwd()
+    else:
+        configfile = os.path.dirname(sys.argv[0])
+
+    configfile = os.path.join(configfile, os.pardir, "etc", "logblitz.ini")
+
+    config = configparser.ConfigParser()
+    config.optionxform = str
+    config.read(configfile)
+
+    roles = []
+    roles_error = None
+    if remote_user:
+        for section, options in config.items():
+            add_section = None
+            for k, v in options.items():
+                if k == "users":
+                    err, users_re = re_compile_with_error(v)
+                    if err:
+                        roles_error = "[%s]: %s: %s: %s" % (section, k, v,
+                                                            str(err))
+                        add_section = False
+                    else:
+                        add_section = ((add_section is None or add_section) and
+                                       users_re.search(remote_user))
+                elif k.startswith("env_"):
+                    envname = k.removeprefix("env_")
+                    err, env_re = re_compile_with_error(v)
+                    if err:
+                        roles_error = "[%s]: %s: %s: %s" % (section, k, v,
+                                                            str(err))
+                        add_section = False
+                    else:
+                        add_section = ((add_section is None or add_section) and
+                                       envname in os.environ and
+                                       env_re.search(os.environ[envname]))
+            if add_section:
+                roles.append(section)
+
+    if role and role in roles:
+        config_section = role
+    elif remote_user:
+        config_section = remote_user
+    else:
+        config_section = "DEFAULT"
+
+    if config.has_option(config_section, "logdirs"):
+        logdirs = config.get(config_section, "logdirs").split(os.path.pathsep)
+    else:
+        logdirs = []
+
+    if config.has_option(config_section, "charset"):
+        charset = config.get(config_section, "charset")
+    else:
+        charset = ""
+
+    if config.has_option(config_section, "dirfilter"):
+        cfgdirfilter = config.get(config_section, "dirfilter")
+    else:
+        cfgdirfilter = ""
+
+    if config.has_option(config_section, "filefilter"):
+        cfgfilefilter = config.get(config_section, "filefilter")
+    else:
+        cfgfilefilter = ""
+
+    if config.has_option(config_section, "logout_url"):
+        logout_url = config.get(config_section, "logout_url")
+    else:
+        logout_url = ""
+
+    if config.has_option(config_section, "logout_option"):
+        logout_option = config.get(config_section, "logout_option")
+    else:
+        logout_option = ""
+
+    if config.has_option(config_section, "nice_username_env"):
+        nice_username_env = config.get(config_section, "nice_username_env")
+    else:
+        nice_username_env = ""
+
+    query = cookies["query"] if "query" in cookies else ""
+    reverse = "reverse" in cookies and cookies["reverse"] == "True"
+    ignorecase = "ignorecase" in cookies and cookies["ignorecase"] == "True"
+    invert = "invert" in cookies and cookies["invert"] == "True"
+    regex = "regex" in cookies and cookies["regex"] == "True"
+    showlinenumbers = ("showlinenumbers" in cookies and
+                       cookies["showlinenumbers"] == "True")
+    showdotfiles = ("showdotfiles" in cookies and
+                    cookies["showdotfiles"] == "True")
+    showunreadables = ("showunreadables" in cookies and
+                       cookies["showunreadables"] == "True")
+    charset = cookies["charset"] if "charset" in cookies else charset
+    filefilter = cookies["filefilter"] if "filefilter" in cookies else ""
+    tmp = cookies["limitlines"] if "limitlines" in cookies else "1000"
+    if tmp == "" or tmp.isnumeric():
+        limitlines = tmp
+    tmp = cookies["limitmemory"] if "limitmemory" in cookies else "1"
+    if tmp == "" or tmp.isnumeric():
+        limitmemory = tmp
+    tmp = cookies["before"] if "before" in cookies else "0"
+    if tmp == "" or tmp.isnumeric():
+        before = tmp
+    tmp = cookies["after"] if "after" in cookies else "0"
+    if tmp == "" or tmp.isnumeric():
+        after = tmp
+    fileselect = (cookies["fileselect"].split(os.pathsep)
+                  if "fileselect" in cookies else [])
+    oldfileselect = [c for c in cookies.keys()
+                     if c.startswith("fileselect") and c != "fileselect"]
+
+    if is_post:
+        cookies.clear()
+
+        oldrole = form.getvalue("oldrole", "")
+        if role == oldrole:
+            query = form.getvalue("query", "")
+            reverse = "reverse" in form
+            ignorecase = "ignorecase" in form
+            invert = "invert" in form
+            regex = "regex" in form
+            showlinenumbers = "showlinenumbers" in form
+            showdotfiles = "showdotfiles" in form
+            showunreadables = "showunreadables" in form
+            charset = form.getvalue("charset", "")
+            filefilter = form.getvalue("filefilter", "")
+            fileselect = form.getlist("fileselect")
+            tmp = form.getvalue("limitlines", "")
+            if tmp == "" or tmp.isnumeric():
+                limitlines = tmp
+            tmp = form.getvalue("limitmemory", "")
+            if tmp == "" or tmp.isnumeric():
+                limitmemory = tmp
+            tmp = form.getvalue("before", "")
+            if tmp == "" or tmp.isnumeric():
+                before = tmp
+            tmp = form.getvalue("after", "")
+            if tmp == "" or tmp.isnumeric():
+                after = tmp
+
+            cookies["query"] = query
+            cookies["reverse"] = reverse
+            cookies["ignorecase"] = ignorecase
+            cookies["invert"] = invert
+            cookies["regex"] = regex
+            cookies["before"] = before
+            cookies["after"] = after
+            cookies["showlinenumbers"] = showlinenumbers
+            cookies["showdotfiles"] = showdotfiles
+            cookies["showunreadables"] = showunreadables
+            cookies["charset"] = charset
+            cookies["filefilter"] = filefilter
+            cookies["limitlines"] = limitlines
+            cookies["limitmemory"] = limitmemory
+            cookies["fileselect"] = os.pathsep.join(fileselect)
+
+            for k, v in cookies.items():
+                rawcookies["%s%s" % (k, csuffix)] = v
+
+        if remote_user:
+            rawcookies["role_%s" % sane_ruser] = role
+
+    try:
+        codecs.lookup(charset)
+    except LookupError:
+        charset = "ISO-8859-1"
+
+    is_https = (environ.get("wsgi.url_scheme", "http") == "https" or
+                environ.get("HTTPS", "off") == "on")
+    for c in rawcookies.keys():
+        rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
+        rawcookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
+        rawcookies[c]["Secure"] = is_https
+    for c in oldfileselect:
+        rawcookies[c] = ""
+        rawcookies[c]["Max-Age"] = 0
+
+    if len(str(rawcookies)) > 3072:
+        for k in [k for k in rawcookies.keys() if k.startswith("fileselect")]:
+            rawcookies.pop(k)
+
+    error_ff, filefilter_re = re_compile_with_error(filefilter)
+    error_cfgff, cfgfilefilter_re = re_compile_with_error(cfgfilefilter)
+    error_cfgdf, cfgdirfilter_re = re_compile_with_error(cfgdirfilter)
+
+    logfiles = LogFiles()
+
+    html_status = ""
+    html_lines = []
+
+    if roles_error:
+        html_lines = ("Error: Invalid roles in INI file:",
+                      html.escape(roles_error))
+    elif not cfgdirfilter_re:
+        html_lines = ("Error: Invalid dirfilter in INI file:",
+                      html.escape(cfgdirfilter), ":",
+                      html.escape(str(error_cfgdf)))
+    elif not cfgfilefilter_re:
+        html_lines = ("Error: Invalid filefilter in INI file:",
+                      html.escape(cfgfilefilter), ":",
+                      html.escape(str(error_cfgff)))
+    elif not filefilter_re:
+        html_lines = ("Error: Invalid filefilter:",
+                      html.escape(filefilter), ":",
+                      html.escape(str(error_ff)))
+    else:
+        for logdir in logdirs:
+            logfiles.total_dirs += 1
+
+            if logdir.endswith(os.path.sep):
+                logdir = logdir[:-1]
+
+            if traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re,
+                               filefilter_re, logfiles, showdotfiles,
+                               showunreadables):
+                logfiles.shown_dirs += 1
+
+        if is_post and (role == oldrole):
+            html_status, html_lines = search(charset, logdirs, logfiles,
+                                             fileselect, query, reverse,
+                                             ignorecase, invert, regex,
+                                             before, after, limitlines,
+                                             limitmemory)
+
+    result = ["""<!DOCTYPE html>
 <html>
 <head>
 <title>LogBlitz</title>
@@ -593,9 +607,9 @@ optgroup {
 .ln {
   margin-right: 2em;
   -webkit-user-select: none;
-  display: """
-          f'{"inline" if showlinenumbers else "none"}'
-          """;
+  display: """ +
+              ("inline" if showlinenumbers else "none") +
+              ''';
 }
 .red {
   color: red;
@@ -613,26 +627,29 @@ optgroup {
   background-position: center;
 }
 </style>
-</head>"""
-          f"""<body>
+</head>
+<body>
 <form method="POST">
 <div style="height:100%; display:grid; grid-template-rows:auto 1fr auto;
  grid-template-columns:auto 12px 1fr">
 
 <div class="sbt" id="filefilter">
-<input type="text" name="filefilter" value="{(html.escape(filefilter))}"
- placeholder="Filter filenames..." style="width:20em"
+<input type="text" name="filefilter" value="''' +
+              html.escape(filefilter) +
+              '''" placeholder="Filter filenames..." style="width:20em"
  title="Use a regular expression to filter shown filenames">
 <span class="box">
-<input type="checkbox" name="showdotfiles" style="margin-left:10px"
- {('checked="checked"' if showdotfiles else "")} id="showdotfiles"
+<input type="checkbox" name="showdotfiles" style="margin-left:10px" ''' +
+              ('checked="checked" ' if showdotfiles else "") +
+              '''id="showdotfiles"
  title="Show files and directories which names start with a dot">
 <span title="Show files and directories which names start with a dot"
  onclick="toggle('showdotfiles')">Show dot files</span>
 </span>
 <span class="box">
-<input type="checkbox" name="showunreadables" style="margin-left:10px"
- {('checked="checked"' if showunreadables else "")} id="showunreadables"
+<input type="checkbox" name="showunreadables" style="margin-left:10px" ''' +
+              ('checked="checked" ' if showunreadables else "") +
+              '''id="showunreadables"
  title="Show files and directories which are not accessible">
 <span title="Show files and directories which are not accessible"
  onclick="toggle('showunreadables')">Show inaccessible files</span>
@@ -642,42 +659,48 @@ optgroup {
 <div class="bar"></div>
 
 <div class="sbt">
-<input type="text" name="query" value="{(html.escape(query))}"
- placeholder="Search log entries..." style="width:40em"
+<input type="text" name="query" value="''' +
+              html.escape(query) +
+              '''" placeholder="Search log entries..." style="width:40em"
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <span class="box">
-<input type="checkbox" name="reverse" style="margin-left:10px"
- {('checked="checked"' if reverse else "")} id="reverse"
+<input type="checkbox" name="reverse" style="margin-left:10px" ''' +
+              ('checked="checked" ' if reverse else "") +
+              '''id="reverse"
  title="Display latest log entries first">
 <span title="Display latest log entries first"
  onclick="toggle('reverse')">Reverse</span>
 </span>
 <span class="box">
-<input type="checkbox" name="ignorecase" style="margin-left:10px"
- {('checked="checked"' if ignorecase else "")} id="ignorecase"
+<input type="checkbox" name="ignorecase" style="margin-left:10px" ''' +
+              ('checked="checked" ' if ignorecase else "") +
+              '''id="ignorecase"
  title="Search log entries regardless of case">
 <span title="Search log entries regardless of case"
  onclick="toggle('ignorecase')">Ignore case</span>
 </span>
 <span class="box">
-<input type="checkbox" name="invert" style="margin-left:10px"
- {('checked="checked"' if invert else "")} id="invert"
+<input type="checkbox" name="invert" style="margin-left:10px" ''' +
+              ('checked="checked" ' if invert else "") +
+              '''id="invert"
  title="Show log entries not matching the search expression">
 <span title="Show log entries not matching the search expression"
  onclick="toggle('invert')">Invert
 </span>
 </span>
 <span class="box">
-<input type="checkbox" name="regex" style="margin-left:10px"
- {('checked="checked"' if regex else "")} id="regex"
+<input type="checkbox" name="regex" style="margin-left:10px" ''' +
+              ('checked="checked" ' if regex else "") +
+              '''id="regex"
  title="Assume search expression is a regular expression">
 <span title="Assume search expression is a regular expression"
  onclick="toggle('regex')">Regular expression</span>
 </span>
 <span class="box">
-<input type="checkbox" name="showlinenumbers" style="margin-left:10px"
- {('checked="checked"' if showlinenumbers else "")} id="showlinenumbers"
+<input type="checkbox" name="showlinenumbers" style="margin-left:10px" ''' +
+              ('checked="checked" ' if showlinenumbers else "") +
+              '''id="showlinenumbers"
  title="Show line numbers"
  onchange="showHideClass('showlinenumbers', 'ln');
            setCookie('showlinenumbers', 'showlinenumbers');">
@@ -690,138 +713,170 @@ optgroup {
 <span class="box">
 <span title="Show this # of lines before each matching line"
  style="margin-left:10px">Before:</span>
-<input type="text" name="before" value="{html.escape(before)}"
+<input type="text" name="before" value="''' +
+              html.escape(before) +
+              '''"
  title="Show this # of lines before each matching line" style="width:1em">
 </span>
 <span class="box">
 <span title="Show this # of lines after each matching line"
  style="margin-left:10px">After:</span>
-<input type="text" name="after" value="{html.escape(after)}"
+<input type="text" name="after" value="''' +
+              html.escape(after) +
+              '''"
  title="Show this # of lines after each matching line" style="width:1em">
 </span>
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
-<input type="text" name="charset" value="{html.escape(charset)}"
+<input type="text" name="charset" value="''' +
+              html.escape(charset) +
+              '''"
  title="Charset of logfiles" style="width:7em">
 </span>
 <span class="box">
-<input type="text" name="limitlines" value="{html.escape(limitlines)}"
+<input type="text" name="limitlines" value="''' +
+              html.escape(limitlines) +
+              '''"
  title="Limit search results to this number of lines"
  style="margin-left:10px; text-align:right; width:4em">
 <span title="Limit search results to this number of lines">line limit</span>
 </span>
 <span class="box">
-<input type="text" name="limitmemory" value="{html.escape(limitmemory)}"
+<input type="text" name="limitmemory" value="''' +
+              html.escape(limitmemory) +
+              '''"
  title="Limit search results to this amount of memory"
  style="margin-left:10px; text-align:right; width:3em">
 <span title="Limit search results to this amount of memory">MiB memory
- limit</span>""")
+ limit</span>''']
 
-if logout_url:
-    if nice_username_env in os.environ:
-        nice_username = os.environ[nice_username_env]
-    else:
-        nice_username = remote_user
-
-    result += (f"""<span style="float:right; margin-right:5px">
-<a href="{logout_url}" title="Logout{
-html.escape(" user %s" % (nice_username,)) if nice_username else ""
-}"{
-" %s" % (logout_option, ) if logout_option else ""
-}>Logout</a></span>""")
-
-result += ("""</span>
-</div>
-
-<div id="fileselect">
-<select name="fileselect" multiple 
- style="font-family:monospace; height:100%; width:100%">""")
-
-logfiles_selected_files = 0
-logfiles_selected_bytes = 0
-
-for logdir in sorted(logfiles.dir2files):
-    result += f'<optgroup label="{html.escape(logdir)}{os.path.sep}">\n'
-
-    for logfile in logfiles.dir2files[logdir]:
-        filler = (logfiles.max_name_indent_len - 2 * logfile["indent"] -
-                  len(logfile["name"]) + 1)
-
-        if "path" in logfile:
-            if logfile["path"] in fileselect:
-                selected = ' selected="selected"'
-                logfiles_selected_files += 1
-                logfiles_selected_bytes += logfile["size"]
-            else:
-                selected = ""
-
-            style = ("" if logfile["readable"] else
-                     ' style="text-decoration:line-through"')
-            result += (f'<option value="{html.escape(logfile["path"])}"'
-                       f'{selected}{style}>{"&nbsp;" * 2 * logfile["indent"]}'
-                       f'{html.escape(logfile["name"])}{"&nbsp;" * filler}'
-                       f' {"&nbsp;" * (8 - len(logfile["size_human"]))}'
-                       f'{logfile["size_human"]}&nbsp;&nbsp;'
-                       f'{logfile["mtime_human"]}&nbsp;</option>\n')
+    if logout_url:
+        if nice_username_env in environ:
+            nice_username = environ[nice_username_env]
         else:
-            result += (f'<option>{"&nbsp;" * 2 * logfile["indent"]}'
-                       f'{html.escape(logfile["name"])}</option>\n')
+            nice_username = remote_user
 
-    result += "</optgroup>\n"
+        result += ['<span style="float:right; margin-right:5px"><a href="' +
+                   logout_url +
+                   '" title="Logout' +
+                   (html.escape(" user %s" % (nice_username,))
+                    if nice_username else "") +
+                   '"',
+                   logout_option if logout_option else "",
+                   ">Logout</a></span>"]
 
-result += f"""</select>
-</div>
+    result += ["</span>",
+               "</div>",
+               "",
+               '<div id="fileselect">',
+               '<select name="fileselect" multiple',
+               ' style="font-family:monospace; height:100%; width:100%">']
 
-<div class="bar" id="barm"></div>
+    logfiles_selected_files = 0
+    logfiles_selected_bytes = 0
 
-<div style="font-family: monospace; vertical-align: top; overflow: scroll">
-{"".join(html_lines)}
-</div>
+    for logdir in sorted(logfiles.dir2files):
+        result += ['<optgroup label="' +
+                   html.escape(logdir) +
+                   os.path.sep +
+                   '">']
 
-<div class="sbb" id="filestatus">
-{logfiles_selected_files}/{logfiles.shown_files}/{logfiles.total_files} files
-({bytes_pretty(logfiles_selected_bytes)}/{
-  bytes_pretty(logfiles.shown_bytes)}/{bytes_pretty(logfiles.total_bytes)}),
-{logfiles.shown_dirs}/{logfiles.total_dirs} folders shown
-</div>
+        for logfile in logfiles.dir2files[logdir]:
+            filler = (logfiles.max_name_indent_len - 2 * logfile["indent"] -
+                      len(logfile["name"]) + 1)
 
-<div class="bar"></div>
+            if "path" in logfile:
+                if logfile["path"] in fileselect:
+                    selected = ' selected="selected"'
+                    logfiles_selected_files += 1
+                    logfiles_selected_bytes += logfile["size"]
+                else:
+                    selected = ""
 
-<div class="sbb">
-{html_status}
-<span style="float:right">
-<span title="Role" style="margin-right:10px">Role:
-<select name="role">
-<option></option>
-"""
+                style = ("" if logfile["readable"] else
+                         ' style="text-decoration:line-through"')
+                result += ['<option value="' +
+                           html.escape(logfile["path"]) +
+                           '"' +
+                           selected +
+                           style +
+                           ">" +
+                           "&nbsp;" * 2 * logfile["indent"] +
+                           html.escape(logfile["name"]) +
+                           "&nbsp;" * filler +
+                           " " +
+                           "&nbsp;" * (8 - len(logfile["size_human"])) +
+                           logfile["size_human"] +
+                           "&nbsp;&nbsp;" +
+                           logfile["mtime_human"] +
+                           "&nbsp;</option>"]
+            else:
+                result += ["<option>" +
+                           "&nbsp;" * 2 * logfile["indent"] +
+                           html.escape(logfile["name"]) +
+                           "</option>"]
 
-for r in sorted(roles):
-    result += ("<option" + (' selected="selected"' if r == role else "") +
-               ">" + html.escape(r) + "</option>\n")
+        result += ["</optgroup>"]
 
-result += (f"""</select>
-</span>
-<span style="margin-right:10px">
-Run time: {"%.1fs" % (time.perf_counter() - start_time,)}
-</span>
-<span style="margin-right:10px">
-Regex module: {RE_MODULE}
-</span>
-<span style="margin-right:10px">
-Server local time: {datetime.datetime.now().strftime(DATETIME_FMT)}
-</span>
-<span style="margin-right:5px">
-<a href="https://ogris.de/logblitz/"
- target="_blank">About LogBlitz {VERSION}...</a>
-</span>
-</span>
-</div>
+    result += ["</select>",
+               "</div>",
+               '<div class="bar" id="barm"></div>',
+               '<div style="font-family: monospace; vertical-align: top;' +
+               ' overflow: scroll">']
+    result += html_lines
+    result += ["</div>",
+               '<div class="sbb" id="filestatus">',
+               str(logfiles_selected_files) + "/" +
+               str(logfiles.shown_files) + "/" +
+               str(logfiles.total_files),
+               "files",
+               "(" +
+               bytes_pretty(logfiles_selected_bytes) + "/" +
+               bytes_pretty(logfiles.shown_bytes) + "/" +
+               bytes_pretty(logfiles.total_bytes) + "),",
+               str(logfiles.shown_dirs) + "/" +
+               str(logfiles.total_dirs),
+               "folders shown</div>",
+               '<div class="bar"></div>',
+               '<div class="sbb">',
+               html_status,
+               '<span style="float:right">',
+               '<span title="Role" style="margin-right:10px">Role:',
+               '<select name="role">',
+               "<option></option>"]
 
-</div>
-<input type="hidden" name="oldrole" value="{html.escape(role)}">
-</form>
-"""
-           """<script>
+    for r in sorted(roles):
+        result += ["<option" + (' selected="selected"' if r == role else "") +
+                   ">",
+                   html.escape(r),
+                   "</option>"]
+
+    result += ["</select>",
+               "</span>",
+               '<span style="margin-right:10px">',
+               "Run time:",
+               "%.1fs" % (time.perf_counter() - start_time,),
+               "</span>",
+               '<span style="margin-right:10px">',
+               "Regex module:",
+               RE_MODULE,
+               "</span>",
+               '<span style="margin-right:10px">',
+               "Server local time:",
+               datetime.datetime.now().strftime(DATETIME_FMT),
+               "</span>",
+               '<span style="margin-right:5px">',
+               '<a href="https://ogris.de/logblitz/"',
+               'target="_blank">About LogBlitz',
+               VERSION + "...</a>",
+               "</span>",
+               "</span>",
+               "</div>",
+               "</div>",
+               '<input type="hidden" name="oldrole" value="' +
+               html.escape(role) + '">',
+               "</form>",
+               """<script>
 document.querySelectorAll(".bar").forEach(function (elem) {
   elem.onmousedown = function (ev) {
     var fileFilter = document.getElementById("filefilter");
@@ -875,21 +930,41 @@ function setCookie (elemId, cookieName)
   var elem = document.getElementById(elemId);
   if (elem) {
     var show = (elem.checked ? "True" : "False");
-    document.cookie = """
-           f"""cookieName{" + '_%s'" % html.escape(sane_ruser)
-           if remote_user else ""} + "=" + show + "; max-age="""
-           f"""{COOKIE_MAX_AGE}; SameSite=Strict; {"Secure; "
-           if is_https else ""}";"""
-           """
+    document.cookie = cookieName""" +
+               (" + '_" + html.escape(sane_ruser) + "'"
+                if remote_user else "") +
+               '"=" + show + "; max-age=' +
+               str(COOKIE_MAX_AGE) + "; SameSite=Strict; " +
+               ("Secure; " if is_https else "") + """;
   }
 }
 </script>
 </body>
-</html>""")
+</html>"""]
 
-print("Content-Type: text/html; charset=utf-8\r\n"
-      f'Content-Length: {len(result.encode("utf-8"))}')
-if rawcookies:
-    print(rawcookies)
-print()
-print(result, end="")
+    return rawcookies, "\n".join(result)
+
+
+def application(environ, start_response):
+    charset = "utf-8"
+    is_wsgi = not environ.get("wsgi.input", None) is None
+    rawcookies, result = logblitz(environ, is_wsgi)
+
+    bresult = result.encode(charset)
+    headers = [
+        ("Content-Type", "text/html; charset=" + charset),
+        ("Content-Length", str(len(bresult)))
+    ] + [str(cookie).split(": ", 1) for cookie in rawcookies.values()]
+    start_response("200 Ok", headers)
+
+    return [bresult] if is_wsgi else result
+
+
+def start_cgi_response(status, headers):
+    print("Status: " + status)
+    print("".join([": ".join(hdr) for hdr in headers]))
+    print()
+
+
+if __name__ == "__main__":
+    print(application(os.environ, start_cgi_response), end="")
