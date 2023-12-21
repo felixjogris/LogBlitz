@@ -63,7 +63,7 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
                     subdir="", indent=0):
     try:
         entries = os.scandir(os.path.join(logdir, subdir))
-    except OSError as _:
+    except OSError:
         return False
 
     if not showdotfiles:
@@ -301,7 +301,7 @@ def re_compile_with_error(filter_text):
 rawcookies = http.cookies.SimpleCookie()
 try:
     rawcookies.load(os.environ.get("HTTP_COOKIE", ""))
-except http.cookies.CookieError as _:
+except http.cookies.CookieError:
     pass
 
 remote_user = os.environ.get("REMOTE_USER")
@@ -490,7 +490,7 @@ if is_post:
 
 try:
     codecs.lookup(charset)
-except LookupError as _:
+except LookupError:
     charset = "ISO-8859-1"
 
 is_https = os.environ.get("HTTPS", "off") == "on"
