@@ -7,7 +7,7 @@ import sys
 import os
 import datetime
 import html
-import cgi
+import urllib.parse
 import gzip
 import bz2
 import configparser
@@ -25,6 +25,7 @@ except ModuleNotFoundError:
 VERSION = "16"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
+HTML_CHARSET = "utf-8"
 
 
 class LogFiles:
@@ -304,6 +305,29 @@ def re_compile_with_error(filter_text):
     return None, filter_re
 
 
+def pocgi(environ, is_wsgi):
+    class Form(dict):
+        def getvalue(self, key, default):
+            value = self.get(key, None)
+            return value[0] if value else default
+
+        def getlist(self, key):
+            return self.get(key, [])
+
+    clen = environ.get("CONTENT_LENGTH", None)
+    if not type(clen) is str or not clen.isdecimal():
+        return {}
+
+    clen = int(clen)
+    if is_wsgi:
+        indata = environ["wsgi.input"].read(clen)
+    else:
+        indata = open(sys.stdin.fileno(), "rb").read(clen)
+
+    return Form(urllib.parse.parse_qs(indata.decode(HTML_CHARSET),
+                                      encoding=HTML_CHARSET))
+
+
 def logblitz(environ, is_wsgi):
     rawcookies = http.cookies.SimpleCookie()
     try:
@@ -317,7 +341,7 @@ def logblitz(environ, is_wsgi):
     is_post = (environ.get("REQUEST_METHOD", "GET") == "POST")
 
     if is_post:
-        form = cgi.FieldStorage()
+        form = pocgi(environ, is_wsgi)
         role = form.getvalue("role", "")
     elif remote_user and "role_%s" % sane_ruser in rawcookies:
         role = rawcookies["role_%s" % sane_ruser].value
@@ -375,8 +399,8 @@ def logblitz(environ, is_wsgi):
                         add_section = False
                     else:
                         add_section = ((add_section is None or add_section) and
-                                       envname in os.environ and
-                                       env_re.search(os.environ[envname]))
+                                       envname in environ and
+                                       env_re.search(environ[envname]))
             if add_section:
                 roles.append(section)
 
@@ -632,7 +656,9 @@ optgroup {
 </style>
 </head>
 <body>
-<form method="POST">
+<form accept-charset="''' +
+              HTML_CHARSET +
+              '''" method="POST">
 <div style="height:100%; display:grid; grid-template-rows:auto 1fr auto;
  grid-template-columns:auto 12px 1fr">
 
@@ -949,15 +975,14 @@ function setCookie (elemId, cookieName)
 
 
 def application(environ, start_response):
-    charset = "utf-8"
     is_wsgi = not environ.get("wsgi.input", None) is None
     rawcookies, result = logblitz(environ, is_wsgi)
 
-    bresult = result.encode(charset)
+    bresult = result.encode(HTML_CHARSET)
     headers = [
-        ("Content-Type", "text/html; charset=" + charset),
+        ("Content-Type", "text/html; charset=" + HTML_CHARSET),
         ("Content-Length", str(len(bresult)))
-    ] + [str(cookie).split(": ", 1) for cookie in rawcookies.values()]
+    ] + [tuple(str(cookie).split(": ", 1)) for cookie in rawcookies.values()]
     start_response("200 Ok", headers)
 
     return [bresult] if is_wsgi else result
