@@ -337,7 +337,10 @@ def logblitz(environ, is_wsgi):
 
     rawcookies.clear()
 
-    if is_wsgi:
+    configfile = environ.get("SCRIPT_FILENAME", None)
+    if configfile:
+        configfile = os.path.dirname(configfile)
+    elif is_wsgi:
         configfile = os.getcwd()
     else:
         configfile = os.path.dirname(sys.argv[0])
