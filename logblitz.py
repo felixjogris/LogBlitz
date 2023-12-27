@@ -690,7 +690,7 @@ optgroup {
 <div class="sbt">
 <input type="text" name="query" value="''' +
               html.escape(query) +
-              '''" placeholder="Search log entries..." style="width:40em"
+              '''" placeholder="Search log entries..." style="width:30em"
  title="Enter an expression to search log entries">
 <input type="submit" name="search" value="Search" style="margin-left:10px">
 <span class="box">
