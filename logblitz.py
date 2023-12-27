@@ -29,14 +29,15 @@ HTML_CHARSET = "utf-8"
 
 
 class LogFiles:
-    dir2files = {}
-    max_name_indent_len = 0
-    shown_files = 0
-    total_files = 0
-    shown_bytes = 0
-    total_bytes = 0
-    shown_dirs = 0
-    total_dirs = 0
+    def __init__(self):
+        self.dir2files = {}
+        self.max_name_indent_len = 0
+        self.shown_files = 0
+        self.total_files = 0
+        self.shown_bytes = 0
+        self.total_bytes = 0
+        self.shown_dirs = 0
+        self.total_dirs = 0
 
 
 def bytes_pretty(filesize):
