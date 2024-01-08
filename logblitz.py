@@ -101,7 +101,11 @@ def traverse_logdir(logdir, cfgdirfilter_re, cfgfilefilter_re, filefilter_re,
 
         elif (entry.is_file(follow_symlinks=False) and
               cfgfilefilter_re.search(entry.name)):
-            stat = entry.stat(follow_symlinks=False)
+            try:
+                stat = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+
             logfiles.total_files += 1
             logfiles.total_bytes += stat.st_size
 
@@ -962,9 +966,9 @@ function setCookie (elemId, cookieName)
     document.cookie = cookieName""" +
                (" + '_" + html.escape(sane_ruser) + "'"
                 if remote_user else "") +
-               '"=" + show + "; max-age=' +
-               str(COOKIE_MAX_AGE) + "; SameSite=Strict; " +
-               ("Secure; " if is_https else "") + """;
+               ' + "=" + show + "; max-age=' +
+               str(COOKIE_MAX_AGE) + "; SameSite=Strict;" +
+               (" Secure;" if is_https else "") + """"
   }
 }
 </script>
