@@ -68,6 +68,30 @@ LogBlitz does not interpret the log entries in any way, but sees them just as a 
 
 5. Limit access to /cgi-bin/logblitz.py, e.g. by an ip address restriction and/or an authentication scheme. Otherwise, anybody may read your logfiles. In any case, enforce https since you transfer log data which may contain sensitive information.
 
+## WSGI
+Starting with version 16, LogBlitz can be served by a [WSGI](https://en.wikipedia.org/wiki/Web_Server_Gateway_Interface) server in addition to its CGI interface. If you use [mod\_wsgi](https://pypi.org/project/mod-wsgi/), then you can build upon these configuration snippets for [Apache](https://http.apache.org/):
+
+```
+WSGIDaemonProcess logblitz processes=1 display-name=logblitz threads=5 user=logblitz group=logblitz umask=0777 script-user=root inactivity-timeout=3600 cpu-time-limit=600 memory-limit=536870912 virtual-memory-limit=1073741824
+WSGIScriptAlias /wsgi/ /usr/local/www/wsgi/
+<Directory /usr/local/www/wsgi>
+    WSGIProcessGroup default
+    AllowOverride None
+    Options None
+    Require all granted
+</Directory>
+```
+
+This assumes that you have created a local user account named "logblitz", while the logblitz.py file is owned by root and placed in "/usr/local/www/wsgi". If you plan to use the re2 a regex library, which is an extension written in C, then set [WSGIApplicationGroup](https://modwsgi.readthedocs.io/en/master/configuration-directives/WSGIApplicationGroup.html) to "%{GLOBAL}":
+
+```
+<Directory /usr/local/www/wsgi>
+    ...
+    WSGIApplicationGroup %{GLOBAL}
+    ...
+</Directory>
+```
+
 ## Homepage
 
 https://ogris.de/logblitz/
