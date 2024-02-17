@@ -1,7 +1,7 @@
 #!/usr/bin/env -S-P/usr/local/bin:/usr/bin:/bin python3
 
 import time
-start_time = time.perf_counter()
+load_time = time.perf_counter()
 
 import sys
 import os
@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "16"
+VERSION = "17"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 HTML_CHARSET = "utf-8"
@@ -333,7 +333,7 @@ def pocgi(environ, is_wsgi):
                                       encoding=HTML_CHARSET))
 
 
-def logblitz(environ, is_wsgi):
+def logblitz(environ, is_wsgi, start_time):
     rawcookies = http.cookies.SimpleCookie()
     try:
         rawcookies.load(environ.get("HTTP_COOKIE", ""))
@@ -976,28 +976,27 @@ function setCookie (elemId, cookieName)
 </body>
 </html>"""]
 
-    return rawcookies, "\n".join(result)
-
-
-def application(environ, start_response):
-    is_wsgi = not environ.get("wsgi.input", None) is None
-    rawcookies, result = logblitz(environ, is_wsgi)
-
+    result = "\n".join(result)
     bresult = result.encode(HTML_CHARSET)
     headers = [
         ("Content-Type", "text/html; charset=" + HTML_CHARSET),
         ("Content-Length", str(len(bresult)))
     ] + [tuple(str(cookie).split(": ", 1)) for cookie in rawcookies.values()]
+
+    return headers, bresult if is_wsgi else result
+
+
+def application(environ, start_response):
+    headers, bresult = logblitz(environ, True, time.perf_counter())
     start_response("200 Ok", headers)
 
-    return [bresult] if is_wsgi else result
-
-
-def start_cgi_response(status, headers):
-    print("Status: " + status)
-    print("".join([": ".join(hdr) for hdr in headers]))
-    print()
+    return [bresult]
 
 
 if __name__ == "__main__":
-    print(application(os.environ, start_cgi_response), end="")
+    headers, result = logblitz(os.environ, False, load_time)
+    print("Status: 200 Ok")
+    for hdr in headers:
+       print(": ".join(hdr))
+    print()
+    print(result)
