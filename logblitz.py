@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "17"
+VERSION = "18"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 HTML_CHARSET = "utf-8"
@@ -480,6 +480,9 @@ def logblitz(environ, is_wsgi, start_time):
                   if "fileselect" in cookies else [])
     oldfileselect = [c for c in cookies.keys()
                      if c.startswith("fileselect") and c != "fileselect"]
+    autorefresh = "autorefresh" in cookies and cookies["autorefresh"] == "True"
+    tmp = cookies["refreshsec"] if "refreshsec" in cookies else ""
+    refreshsec = tmp if tmp.isnumeric() else "2"
 
     if is_post:
         cookies.clear()
@@ -509,6 +512,9 @@ def logblitz(environ, is_wsgi, start_time):
             tmp = form.getvalue("after", "")
             if tmp == "" or tmp.isnumeric():
                 after = tmp
+            autorefresh = "autorefresh" in form
+            tmp = form.getvalue("refreshsec", "")
+            refreshsec = tmp if tmp.isnumeric() else "2"
 
             cookies["query"] = query
             cookies["reverse"] = reverse
@@ -525,6 +531,8 @@ def logblitz(environ, is_wsgi, start_time):
             cookies["limitlines"] = limitlines
             cookies["limitmemory"] = limitmemory
             cookies["fileselect"] = os.pathsep.join(fileselect)
+            cookies["autorefresh"] = autorefresh
+            cookies["refreshsec"] = refreshsec
 
             for k, v in cookies.items():
                 rawcookies["%s%s" % (k, csuffix)] = v
@@ -541,7 +549,8 @@ def logblitz(environ, is_wsgi, start_time):
                 environ.get("HTTPS", "off") == "on")
     for c in rawcookies.keys():
         rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
-        rawcookies[c]["HttpOnly"] = c not in ("showlinenumbers",)
+        rawcookies[c]["HttpOnly"] = c not in (
+            "showlinenumbers", "autorefresh", "refreshsec")
         rawcookies[c]["Secure"] = is_https
     for c in oldfileselect:
         rawcookies[c] = ""
@@ -587,7 +596,7 @@ def logblitz(environ, is_wsgi, start_time):
                                showunreadables):
                 logfiles.shown_dirs += 1
 
-        if is_post and (role == oldrole):
+        if (is_post and (role == oldrole)) or autorefresh:
             html_status, html_lines = search(charset, logdirs, logfiles,
                                              fileselect, query, reverse,
                                              ignorecase, invert, regex,
@@ -667,8 +676,8 @@ optgroup {
 <div style="height:100%; display:grid; grid-template-rows:auto 1fr auto;
  grid-template-columns:auto 12px 1fr">
 
-<div class="sbt" id="filefilter">
-<input type="text" name="filefilter" value="''' +
+<div class="sbt" id="filefilterbox">
+<input type="text" name="filefilter" id="filefilter" value="''' +
               html.escape(filefilter) +
               '''" placeholder="Filter filenames..." style="width:20em"
  title="Use a regular expression to filter shown filenames">
@@ -693,7 +702,7 @@ optgroup {
 <div class="bar"></div>
 
 <div class="sbt">
-<input type="text" name="query" value="''' +
+<input type="text" name="query" id="query" value="''' +
               html.escape(query) +
               '''" placeholder="Search log entries..." style="width:30em"
  title="Enter an expression to search log entries">
@@ -742,12 +751,12 @@ optgroup {
  onclick="toggle('showlinenumbers');
           showHideClass('showlinenumbers', 'ln');
           setCookie('showlinenumbers',
-                    'showlinenumbers');">Show line numbers</span>
+                    'showlinenumbers');">Line numbers</span>
 </span>
 <span class="box">
 <span title="Show this # of lines before each matching line"
  style="margin-left:10px">Before:</span>
-<input type="text" name="before" value="''' +
+<input type="text" name="before" id="before" value="''' +
               html.escape(before) +
               '''"
  title="Show this # of lines before each matching line" style="width:1em">
@@ -755,34 +764,51 @@ optgroup {
 <span class="box">
 <span title="Show this # of lines after each matching line"
  style="margin-left:10px">After:</span>
-<input type="text" name="after" value="''' +
+<input type="text" name="after" id="after" value="''' +
               html.escape(after) +
               '''"
  title="Show this # of lines after each matching line" style="width:1em">
 </span>
 <span class="box">
 <span title="Charset of logfiles" style="margin-left:10px">Charset:</span>
-<input type="text" name="charset" value="''' +
+<input type="text" name="charset" id="charset" value="''' +
               html.escape(charset) +
               '''"
  title="Charset of logfiles" style="width:7em">
 </span>
 <span class="box">
-<input type="text" name="limitlines" value="''' +
+<span title="Limit search results" style="margin-left:10px">Limits:</span>
+<input type="text" name="limitlines" id="limitlines" value="''' +
               html.escape(limitlines) +
               '''"
  title="Limit search results to this number of lines"
- style="margin-left:10px; text-align:right; width:4em">
-<span title="Limit search results to this number of lines">line limit</span>
-</span>
-<span class="box">
-<input type="text" name="limitmemory" value="''' +
+ style="text-align:right; width:4em">
+<span title="Limit search results to this number of lines">lines</span>
+<input type="text" name="limitmemory" id="limitmemory" value="''' +
               html.escape(limitmemory) +
               '''"
  title="Limit search results to this amount of memory"
- style="margin-left:10px; text-align:right; width:3em">
-<span title="Limit search results to this amount of memory">MiB memory
- limit</span>''']
+ style="text-align:right; width:3em">
+<span title="Limit search results to this amount of memory">MiB</span>
+</span>
+<span class="box">
+<input type="checkbox" name="autorefresh" style="margin-left:10px" ''' +
+              ('checked="checked" ' if autorefresh else "") +
+              '''id="autorefresh"
+ title="Autorefresh search"
+ onchange="setCookie('autorefresh', 'autorefresh');
+           autoRefresh();">
+<span title="Autorefresh search"
+ onclick="toggle('autorefresh');
+          setCookie('autorefresh', 'autorefresh');
+          autoRefresh();">Refresh</span>
+<input type="text" name="refreshsec" value="''' +
+              html.escape(refreshsec) +
+              '''" id="refreshsec"
+ title="Autorefresh search every given second(s)"
+ style="text-align:right; width:2em">
+</span>
+''']
 
     if logout_url:
         if nice_username_env in environ:
@@ -799,11 +825,10 @@ optgroup {
                    logout_option if logout_option else "",
                    ">Logout</a></span>"]
 
-    result += ["</span>",
-               "</div>",
+    result += ["</div>",
                "",
-               '<div id="fileselect">',
-               '<select name="fileselect" multiple',
+               '<div id="fileselectbox">',
+               '<select name="fileselect" id="fileselect" multiple',
                ' style="font-family:monospace; height:100%; width:100%">']
 
     logfiles_selected_files = 0
@@ -859,7 +884,7 @@ optgroup {
                ' overflow: scroll">']
     result += html_lines
     result += ["</div>",
-               '<div class="sbb" id="filestatus">',
+               '<div class="sbb" id="filestatusbox">',
                str(logfiles_selected_files) + "/" +
                str(logfiles.shown_files) + "/" +
                str(logfiles.total_files),
@@ -876,7 +901,7 @@ optgroup {
                html_status,
                '<span style="float:right">',
                '<span title="Role" style="margin-right:10px">Role:',
-               '<select name="role">',
+               '<select name="role" id="role">',
                "<option></option>"]
 
     for r in sorted(roles):
@@ -913,9 +938,9 @@ optgroup {
                """<script>
 document.querySelectorAll(".bar").forEach(function (elem) {
   elem.onmousedown = function (ev) {
-    var fileFilter = document.getElementById("filefilter");
-    var fileSelect = document.getElementById("fileselect");
-    var fileStatus = document.getElementById("filestatus");
+    var fileFilter = document.getElementById("filefilterbox");
+    var fileSelect = document.getElementById("fileselectbox");
+    var fileStatus = document.getElementById("filestatusbox");
 
     var startWidth = Math.max(fileFilter.offsetWidth, fileSelect.offsetWidth);
     startWidth = Math.max(startWidth, fileStatus.offsetWidth);
@@ -969,9 +994,48 @@ function setCookie (elemId, cookieName)
                 if remote_user else "") +
                ' + "=" + show + "; max-age=' +
                str(COOKIE_MAX_AGE) + "; SameSite=Strict;" +
-               (" Secure;" if is_https else "") + """"
+               (" Secure;" if is_https else "") + """";
   }
 }
+
+var timeout = false;
+
+function autoRefresh ()
+{
+  var elem = document.getElementById("autorefresh");
+  var autorefresh = elem && elem.checked;
+  if (autorefresh) {
+    timeout = window.setTimeout(function () {
+      window.location.search = "";
+    }, """ + refreshsec + """ * 1000);
+  } else if (timeout) {
+    window.clearTimeout(timeout);
+    timeout = false;
+  }
+
+  new Array("query",
+            "reverse",
+            "ignorecase",
+            "invert",
+            "regex",
+            "showlinenumbers",
+            "showdotfiles",
+            "showunreadables",
+            "charset",
+            "filefilter",
+            "fileselect",
+            "limitlines",
+            "limitmemory",
+            "before",
+            "after",
+            "refreshsec",
+            "role").forEach(function (id) {
+    var elem = document.getElementById(id);
+    if (elem) elem.disabled = autorefresh;
+});
+}
+
+autoRefresh();
 </script>
 </body>
 </html>"""]
