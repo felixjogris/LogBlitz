@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "18"
+VERSION = "19"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 HTML_CHARSET = "utf-8"
@@ -550,7 +550,8 @@ def logblitz(environ, is_wsgi, start_time):
     for c in rawcookies.keys():
         rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
         rawcookies[c]["HttpOnly"] = c not in (
-            "showlinenumbers", "autorefresh", "refreshsec")
+            "showlinenumbers", "showlinenumbers%s" % (csuffix,),
+            "autorefresh", "autorefresh%s" % (csuffix,),)
         rawcookies[c]["Secure"] = is_https
     for c in oldfileselect:
         rawcookies[c] = ""
@@ -706,7 +707,8 @@ optgroup {
               html.escape(query) +
               '''" placeholder="Search log entries..." style="width:30em"
  title="Enter an expression to search log entries">
-<input type="submit" name="search" value="Search" style="margin-left:10px">
+<input type="submit" name="search" value="Search" style="margin-left:10px"
+ id="searchsubmit">
 <span class="box">
 <input type="checkbox" name="reverse" style="margin-left:10px" ''' +
               ('checked="checked" ' if reverse else "") +
@@ -967,43 +969,36 @@ document.querySelectorAll(".bar").forEach(function (elem) {
 function toggle (elemId)
 {
   var elem = document.getElementById(elemId);
-  if (elem) {
+  if (elemId == "autorefresh" ||
+      !document.getElementById("autorefresh").checked) {
     elem.checked = !elem.checked;
   }
 }
 
 function showHideClass (elemId, className)
 {
-  var elem = document.getElementById(elemId);
-  if (elem) {
-    var display = (elem.checked ? "inline" : "none");
-    var elems = document.getElementsByClassName(className);
-    for (i = 0; i < elems.length; i++) {
-      elems[i].style.display = display;
-    }
+  var display = (document.getElementById(elemId).checked ? "inline" : "none");
+  var elems = document.getElementsByClassName(className);
+  for (i = 0; i < elems.length; i++) {
+    elems[i].style.display = display;
   }
 }
 
 function setCookie (elemId, cookieName)
 {
-  var elem = document.getElementById(elemId);
-  if (elem) {
-    var show = (elem.checked ? "True" : "False");
-    document.cookie = cookieName""" +
-               (" + '_" + html.escape(sane_ruser) + "'"
-                if remote_user else "") +
-               ' + "=" + show + "; max-age=' +
-               str(COOKIE_MAX_AGE) + "; SameSite=Strict;" +
-               (" Secure;" if is_https else "") + """";
-  }
+  var show = (document.getElementById(elemId).checked ? "True" : "False");
+  document.cookie = cookieName""" +
+             " + '" + html.escape(csuffix) +
+             "=' + show + '; max-age=" +
+             str(COOKIE_MAX_AGE) + "; SameSite=Strict;" +
+             (" Secure;" if is_https else "") + """';
 }
 
 var timeout = false;
 
 function autoRefresh ()
 {
-  var elem = document.getElementById("autorefresh");
-  var autorefresh = elem && elem.checked;
+  var autorefresh = document.getElementById("autorefresh").checked;
   if (autorefresh) {
     timeout = window.setTimeout(function () {
       window.location.search = "";
@@ -1014,6 +1009,7 @@ function autoRefresh ()
   }
 
   new Array("query",
+            "searchsubmit",
             "reverse",
             "ignorecase",
             "invert",
@@ -1030,8 +1026,7 @@ function autoRefresh ()
             "after",
             "refreshsec",
             "role").forEach(function (id) {
-    var elem = document.getElementById(id);
-    if (elem) elem.disabled = autorefresh;
+    document.getElementById(id).disabled = autorefresh;
 });
 }
 
