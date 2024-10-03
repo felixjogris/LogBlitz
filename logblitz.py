@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "19"
+VERSION = "20"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 HTML_CHARSET = "utf-8"
@@ -458,6 +458,8 @@ def logblitz(environ, is_wsgi, start_time):
     regex = "regex" in cookies and cookies["regex"] == "True"
     showlinenumbers = ("showlinenumbers" in cookies and
                        cookies["showlinenumbers"] == "True")
+    wraplines = ("wraplines" in cookies and
+                 cookies["wraplines"] == "True")
     showdotfiles = ("showdotfiles" in cookies and
                     cookies["showdotfiles"] == "True")
     showunreadables = ("showunreadables" in cookies and
@@ -495,6 +497,7 @@ def logblitz(environ, is_wsgi, start_time):
             invert = "invert" in form
             regex = "regex" in form
             showlinenumbers = "showlinenumbers" in form
+            wraplines = "wraplines" in form
             showdotfiles = "showdotfiles" in form
             showunreadables = "showunreadables" in form
             charset = form.getvalue("charset", "")
@@ -524,6 +527,7 @@ def logblitz(environ, is_wsgi, start_time):
             cookies["before"] = before
             cookies["after"] = after
             cookies["showlinenumbers"] = showlinenumbers
+            cookies["wraplines"] = wraplines
             cookies["showdotfiles"] = showdotfiles
             cookies["showunreadables"] = showunreadables
             cookies["charset"] = charset
@@ -549,8 +553,10 @@ def logblitz(environ, is_wsgi, start_time):
                 environ.get("HTTPS", "off") == "on")
     for c in rawcookies.keys():
         rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
+        rawcookies[c]["SameSite"] = "Strict"
         rawcookies[c]["HttpOnly"] = c not in (
             "showlinenumbers", "showlinenumbers%s" % (csuffix,),
+            "wraplines", "wraplines%s" % (csuffix,),
             "autorefresh", "autorefresh%s" % (csuffix,),)
         rawcookies[c]["Secure"] = is_https
     for c in oldfileselect:
@@ -641,6 +647,11 @@ optgroup {
 }
 .sl, .sr {
   white-space: pre;
+}
+.sl {
+  text-wrap-mode: """ +
+                ("wrap" if wraplines else "nowrap") +
+                """;
 }
 .sr {
   font-weight: bold;
@@ -747,13 +758,26 @@ optgroup {
               ('checked="checked" ' if showlinenumbers else "") +
               '''id="showlinenumbers"
  title="Show line numbers"
- onchange="showHideClass('showlinenumbers', 'ln');
+ onchange="toggleHiddenClass('showlinenumbers', 'ln');
            setCookie('showlinenumbers', 'showlinenumbers');">
 <span title="Show line numbers"
  onclick="toggle('showlinenumbers');
-          showHideClass('showlinenumbers', 'ln');
+          toggleHiddenClass('showlinenumbers', 'ln');
           setCookie('showlinenumbers',
                     'showlinenumbers');">Line numbers</span>
+</span>
+<span class="box">
+<input type="checkbox" name="wraplines" style="margin-left:10px" ''' +
+              ('checked="checked" ' if wraplines else "") +
+              '''id="wraplines"
+ title="Wrap lines"
+ onchange="toggleTextWrap('wraplines', 'sl');
+           setCookie('wraplines', 'wraplines');">
+<span title="Wrap lines"
+ onclick="toggle('wraplines');
+          toggleTextWrap('wraplines', 'sl');
+          setCookie('wraplines',
+                    'wraplines');">Wrap lines</span>
 </span>
 <span class="box">
 <span title="Show this # of lines before each matching line"
@@ -975,12 +999,21 @@ function toggle (elemId)
   }
 }
 
-function showHideClass (elemId, className)
+function toggleHiddenClass (elemId, className)
 {
   var display = (document.getElementById(elemId).checked ? "inline" : "none");
   var elems = document.getElementsByClassName(className);
   for (i = 0; i < elems.length; i++) {
     elems[i].style.display = display;
+  }
+}
+
+function toggleTextWrap (elemId, className)
+{
+  var wrapmode = (document.getElementById(elemId).checked ? "wrap" : "nowrap");
+  var elems = document.getElementsByClassName(className);
+  for (i = 0; i < elems.length; i++) {
+    elems[i].style.textWrapMode = wrapmode;
   }
 }
 
@@ -1015,6 +1048,7 @@ function autoRefresh ()
             "invert",
             "regex",
             "showlinenumbers",
+            "wraplines",
             "showdotfiles",
             "showunreadables",
             "charset",
