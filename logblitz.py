@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     import re
     RE_MODULE = "re"
 
-VERSION = "20"
+VERSION = "21"
 COOKIE_MAX_AGE = 365*24*60*60
 DATETIME_FMT = "%Y/%m/%d %H:%M:%S"
 HTML_CHARSET = "utf-8"
@@ -649,9 +649,9 @@ optgroup {
   white-space: pre;
 }
 .sl {
-  text-wrap-mode: """ +
-                ("wrap" if wraplines else "nowrap") +
-                """;
+  text-wrap: """ +
+           ("wrap" if wraplines else "nowrap") +
+           """;
 }
 .sr {
   font-weight: bold;
@@ -1013,7 +1013,7 @@ function toggleTextWrap (elemId, className)
   var wrapmode = (document.getElementById(elemId).checked ? "wrap" : "nowrap");
   var elems = document.getElementsByClassName(className);
   for (i = 0; i < elems.length; i++) {
-    elems[i].style.textWrapMode = wrapmode;
+    elems[i].style.textWrap = wrapmode;
   }
 }
 
