@@ -553,7 +553,7 @@ def logblitz(environ, is_wsgi, start_time):
                 environ.get("HTTPS", "off") == "on")
     for c in rawcookies.keys():
         rawcookies[c]["Max-Age"] = COOKIE_MAX_AGE
-        rawcookies[c]["SameSite"] = "Strict"
+        rawcookies[c]["SameSite"] = "Lax"
         rawcookies[c]["HttpOnly"] = c not in (
             "showlinenumbers", "showlinenumbers%s" % (csuffix,),
             "wraplines", "wraplines%s" % (csuffix,),
@@ -1023,7 +1023,7 @@ function setCookie (elemId, cookieName)
   document.cookie = cookieName""" +
              " + '" + html.escape(csuffix) +
              "=' + show + '; max-age=" +
-             str(COOKIE_MAX_AGE) + "; SameSite=Strict;" +
+             str(COOKIE_MAX_AGE) + "; SameSite=Lax;" +
              (" Secure;" if is_https else "") + """';
 }
 
